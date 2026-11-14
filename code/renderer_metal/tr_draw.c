@@ -409,6 +409,63 @@ void DrawBoxes(const float (*boxes)[4], int count, const float *color) {
 
 /*
 ================
+DrawTriangles2D
+
+Triangles of a shader of RE_CreateImage2D in their own colors (the cgame's
+HUD), as one surface: one draw. The colors as Draw_SetColor takes them (rgb
+by the identity light)
+================
+*/
+void DrawTriangles2D(qhandle_t hShader, const vert2D_t *vertexes, int numVertexes, const unsigned short *indexes, int numIndexes) {
+	shader_t	*shader;
+	int			i;
+
+	if ( numVertexes <= 0 || numIndexes <= 0 ) {
+		return;
+	}
+	if ( numVertexes > SHADER_MAX_VERTEXES - 1 || numIndexes > SHADER_MAX_INDEXES - 1 ) {
+		ri.Printf( PRINT_WARNING, "WARNING: DrawTriangles2D: %d vertexes, %d indexes: too many\n", numVertexes, numIndexes );
+		return;
+	}
+
+	R_IssuePendingRenderCommands();
+
+	shader = R_GetShaderByHandle( hShader );
+	if ( tess.numIndexes ) {
+		RB_EndSurface();	// a surface left open before it
+	}
+	RB_BeginSurface( shader );
+
+	for ( i = 0; i < numVertexes; i++ ) {
+		const vert2D_t *v = &vertexes[i];
+
+		tess.xyz[i][0] = v->xy[0];
+		tess.xyz[i][1] = v->xy[1];
+		tess.xyz[i][2] = 0;
+		tess.texCoords[i][0][0] = v->st[0];
+		tess.texCoords[i][0][1] = v->st[1];
+		if ( tr.identityLightByte == 255 ) {
+			Com_Memcpy( tess.vertexColors[i], v->rgba, 4 );
+		} else {
+			tess.vertexColors[i][0] = v->rgba[0] * tr.identityLightByte / 255;
+			tess.vertexColors[i][1] = v->rgba[1] * tr.identityLightByte / 255;
+			tess.vertexColors[i][2] = v->rgba[2] * tr.identityLightByte / 255;
+			tess.vertexColors[i][3] = v->rgba[3];
+		}
+	}
+	for ( i = 0; i < numIndexes; i++ ) {
+		// a bad index draws nothing outside the call's vertexes
+		tess.indexes[i] = indexes[i] < numVertexes ? indexes[i] : 0;
+	}
+	tess.numVertexes = numVertexes;
+	tess.numIndexes = numIndexes;
+	tess.vertexColorValid = qtrue;
+
+	RB_EndSurface();
+}
+
+/*
+================
 DrawBox
 ================
 */

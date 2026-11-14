@@ -121,8 +121,10 @@ extern "C" {
 // pixel and texture formats
 #define MB_STENCIL_INDEX				0x1901
 #define MB_DEPTH_COMPONENT				0x1902
+#define MB_ALPHA						0x1906	// a byte a texel (CreateImage2D's IMAGE2D_ALPHA)
 #define MB_RGB							0x1907
 #define MB_RGBA							0x1908
+#define MB_ALPHA8						0x803C	// R8, sampled as (1, 1, 1, R): white with that alpha
 #define MB_RGB5							0x8050
 #define MB_RGB8							0x8051
 #define MB_RGBA4						0x8056

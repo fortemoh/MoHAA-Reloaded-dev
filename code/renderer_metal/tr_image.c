@@ -966,6 +966,123 @@ image_t* R_CreateImageOld(
 
 
 /*
+================
+RE_CreateImage2D
+
+A texture from memory and a 2D shader of the same name drawing it in the
+vertexes' colors (DrawTriangles2D): the cgame's own pictures (its HUD's
+atlas). IMAGE2D_ALPHA is MB_ALPHA8: one byte a texel, an R8 texture sampled
+as white with that alpha (tr_mtl.m). Made again with the same name, the
+image is kept (its storage defined again when the size or format changed)
+and its shader made again if the registration dropped it
+================
+*/
+qhandle_t RE_CreateImage2D( const char *name, int width, int height, int format, const byte *data ) {
+	image_t		*image;
+	int			internalFormat;
+	shader_t	*sh;
+	long		hash;
+	int			i;
+
+	if ( !name || !name[0] || strlen( name ) >= MAX_QPATH || width <= 0 || height <= 0
+		|| width > glConfig.maxTextureSize || height > glConfig.maxTextureSize
+		|| ( format != IMAGE2D_ALPHA && format != IMAGE2D_RGBA ) ) {
+		ri.Printf( PRINT_WARNING, "WARNING: RE_CreateImage2D: bad image \"%s\" %dx%d format %d\n", name ? name : "", width, height, format );
+		return 0;
+	}
+	internalFormat = format == IMAGE2D_ALPHA ? MB_ALPHA8 : MB_RGBA8;
+
+	hash = generateHashValue( name );
+	for ( image = hashTable[hash]; image; image = image->next ) {
+		if ( !strcmp( name, image->imgName ) ) {
+			break;
+		}
+	}
+
+	if ( !image ) {
+		for ( i = 0; i < tr.numImages; i++ ) {
+			if ( !tr.images[i].imgName[0] ) {
+				break;
+			}
+		}
+		if ( i == tr.numImages ) {
+			if ( tr.numImages == MAX_DRAWIMAGES ) {
+				ri.Printf( PRINT_WARNING, "WARNING: RE_CreateImage2D: MAX_DRAWIMAGES hit\n" );
+				return 0;
+			}
+			tr.numImages++;
+		}
+		image = &tr.images[i];
+		Com_Memset( image, 0, sizeof( *image ) );
+		Q_strncpyz( image->imgName, name, sizeof( image->imgName ) );
+		mbGenTextures( 1, &image->texnum );
+		image->next = hashTable[hash];
+		hashTable[hash] = image;
+	}
+
+	R_Bind( image );
+	if ( image->uploadWidth != width || image->uploadHeight != height || image->internalFormat != internalFormat ) {
+		byte *zeros = NULL;
+
+		image->width = image->uploadWidth = width;
+		image->height = image->uploadHeight = height;
+		image->numMipmaps = 0;
+		image->internalFormat = internalFormat;
+		image->wrapClampModeX = MB_CLAMP_TO_EDGE;
+		image->wrapClampModeY = MB_CLAMP_TO_EDGE;
+		image->bytesUsed = width * height * format;
+		if ( !data ) {
+			// a new texture's contents are undefined: 0
+			zeros = ri.Hunk_AllocateTempMemory( width * height * format );
+			Com_Memset( zeros, 0, width * height * format );
+		}
+		mbTexImage2D( MB_TEXTURE_2D, 0, internalFormat, width, height, 0, format == IMAGE2D_ALPHA ? MB_ALPHA : MB_RGBA,
+			MB_UNSIGNED_BYTE, data ? data : zeros );
+		if ( zeros ) {
+			ri.Hunk_FreeTempMemory( zeros );
+		}
+		mbTexParameterf( MB_TEXTURE_2D, MB_TEXTURE_MIN_FILTER, MB_LINEAR );
+		mbTexParameterf( MB_TEXTURE_2D, MB_TEXTURE_MAG_FILTER, MB_LINEAR );
+		mbTexParameterf( MB_TEXTURE_2D, MB_TEXTURE_WRAP_S, MB_CLAMP_TO_EDGE );
+		mbTexParameterf( MB_TEXTURE_2D, MB_TEXTURE_WRAP_T, MB_CLAMP_TO_EDGE );
+	} else if ( data ) {
+		mbTexSubImage2D( MB_TEXTURE_2D, 0, 0, 0, width, height, format == IMAGE2D_ALPHA ? MB_ALPHA : MB_RGBA, MB_UNSIGNED_BYTE, data );
+	}
+	image->r_sequence = r_sequencenumber;
+
+	sh = R_Create2DImageShader( name, image );
+	return sh ? sh->index : 0;
+}
+
+/*
+================
+RE_UpdateImage2D
+
+Replaces texels of the texture of a shader of RE_CreateImage2D (the draws
+made before keep the old texels: tr_mtl.m gives a texture a frame reads a
+new copy)
+================
+*/
+void RE_UpdateImage2D( qhandle_t hShader, int x, int y, int width, int height, const byte *data ) {
+	shader_t	*sh;
+	image_t		*image;
+
+	sh = R_GetShaderByHandle( hShader );
+	if ( !data || !sh || !sh->unfoggedStages[0] || !( image = sh->unfoggedStages[0]->bundle[0].image[0] )
+		|| ( image->internalFormat != MB_ALPHA8 && image->internalFormat != MB_RGBA8 ) ) {
+		return;
+	}
+	R_IssuePendingRenderCommands();
+	if ( tess.numIndexes ) {
+		RB_EndSurface();	// a surface left open was made with the old texels
+	}
+	R_Bind( image );
+	mbTexSubImage2D( MB_TEXTURE_2D, 0, x, y, width, height, image->internalFormat == MB_ALPHA8 ? MB_ALPHA : MB_RGBA,
+		MB_UNSIGNED_BYTE, data );
+}
+
+
+/*
 =========================================================
 
 BMP LOADING

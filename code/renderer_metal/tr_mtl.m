@@ -497,6 +497,7 @@ typedef struct {
 	int				definedLevels;	// levels with an image
 	MTLPixelFormat	format;
 	qboolean		rgbOnly;		// MB_RGB-like internal format: samples alpha 1, replace keeps the incoming alpha
+	qboolean		alphaOnly;		// MB_ALPHA8: R8, samples as (1, 1, 1, R)
 	int				minFilter, magFilter, wrapS, wrapT, anisotropy;
 	qboolean		samplerDirty;
 	qboolean		allocated;		// the name is in use
@@ -3387,7 +3388,7 @@ static int MB_FullMipCount( int width, int height )
 	return levels;
 }
 
-static id<MTLTexture> MB_NewTexture( MTLPixelFormat format, int width, int height, int levels, qboolean rgbOnly )
+static id<MTLTexture> MB_NewTexture( MTLPixelFormat format, int width, int height, int levels, qboolean rgbOnly, qboolean alphaOnly )
 {
 	MTLTextureDescriptor *desc;
 	id<MTLTexture> texture;
@@ -3399,6 +3400,9 @@ static id<MTLTexture> MB_NewTexture( MTLPixelFormat format, int width, int heigh
 		desc.storageMode = MTLStorageModeShared;
 		if ( rgbOnly ) {
 			desc.swizzle = MTLTextureSwizzleChannelsMake( MTLTextureSwizzleRed, MTLTextureSwizzleGreen, MTLTextureSwizzleBlue, MTLTextureSwizzleOne );
+		} else if ( alphaOnly ) {
+			// white with the texel as alpha
+			desc.swizzle = MTLTextureSwizzleChannelsMake( MTLTextureSwizzleOne, MTLTextureSwizzleOne, MTLTextureSwizzleOne, MTLTextureSwizzleRed );
 		}
 		texture = [mb_device newTextureWithDescriptor:desc];
 	}
@@ -3410,7 +3414,7 @@ static qboolean MB_SameTexture( id<MTLTexture> a, id<MTLTexture> b )
 	MTLTextureSwizzleChannels sa = a.swizzle, sb = b.swizzle;
 
 	return a.width == b.width && a.height == b.height && a.mipmapLevelCount == b.mipmapLevelCount
-		&& a.pixelFormat == b.pixelFormat && sa.alpha == sb.alpha;
+		&& a.pixelFormat == b.pixelFormat && sa.alpha == sb.alpha && sa.red == sb.red;
 }
 
 /*
@@ -3434,7 +3438,7 @@ static void MB_ReplaceTexture( mbTexture_t *t, qboolean copy )
 		}
 	}
 	if ( !fresh ) {
-		fresh = MB_NewTexture( old.pixelFormat, (int)old.width, (int)old.height, (int)old.mipmapLevelCount, t->rgbOnly );
+		fresh = MB_NewTexture( old.pixelFormat, (int)old.width, (int)old.height, (int)old.mipmapLevelCount, t->rgbOnly, t->alphaOnly );
 	}
 
 	t->blitSerial = 0;
@@ -3499,7 +3503,7 @@ static NSUInteger MB_LevelBytesPerRow( MTLPixelFormat format, int width )
 	if ( MB_IsCompressed( format ) ) {
 		return (NSUInteger)( ( width + 3 ) / 4 ) * ( format == MTLPixelFormatBC1_RGBA ? 8 : 16 );
 	}
-	return (NSUInteger)width * 4;
+	return (NSUInteger)width * ( format == MTLPixelFormatR8Unorm ? 1 : 4 );
 }
 
 static NSUInteger MB_LevelBytes( MTLPixelFormat format, int width, int height )
@@ -3507,7 +3511,7 @@ static NSUInteger MB_LevelBytes( MTLPixelFormat format, int width, int height )
 	if ( MB_IsCompressed( format ) ) {
 		return MB_LevelBytesPerRow( format, width ) * ( ( height + 3 ) / 4 );
 	}
-	return (NSUInteger)width * height * 4;
+	return MB_LevelBytesPerRow( format, width ) * height;
 }
 
 /*
@@ -3523,7 +3527,7 @@ static void MB_GrowMipChain( mbTexture_t *t )
 	int level;
 
 	t->levels = MB_FullMipCount( t->width, t->height );
-	fresh = MB_NewTexture( t->format, t->width, t->height, t->levels, t->rgbOnly );
+	fresh = MB_NewTexture( t->format, t->width, t->height, t->levels, t->rgbOnly, t->alphaOnly );
 
 	for ( level = 0; level < (int)old.mipmapLevelCount && level < t->definedLevels; level++ ) {
 		int w = t->width >> level ? t->width >> level : 1;
@@ -3556,10 +3560,15 @@ static void MB_GrowMipChain( mbTexture_t *t )
 ** Internal formats as GL1 uploads them: everything uncompressed is RGBA8 (the 16-bit request formats of
 ** r_texturebits 16 are stored at 32 bits); RGB-like formats sample alpha 1 through a swizzle.
 */
-static MTLPixelFormat MB_PixelFormat( int internalformat, qboolean *rgbOnly )
+static MTLPixelFormat MB_PixelFormat( int internalformat, qboolean *rgbOnly, qboolean *alphaOnly )
 {
 	*rgbOnly = qfalse;
+	*alphaOnly = qfalse;
 	switch ( internalformat ) {
+	case MB_ALPHA8:
+		// one byte a texel (CreateImage2D's IMAGE2D_ALPHA): white with that alpha
+		*alphaOnly = qtrue;
+		return MTLPixelFormatR8Unorm;
 	case 3:
 	case MB_RGB:
 	case MB_RGB5:
@@ -3635,22 +3644,23 @@ static mbTexture_t *MB_DefineLevel( int level, int internalformat, int width, in
 {
 	mbTexture_t *t = MB_BoundTexture();
 	MTLPixelFormat format;
-	qboolean rgbOnly;
+	qboolean rgbOnly, alphaOnly;
 
 	if ( !t || width <= 0 || height <= 0 || level < 0 ) {
 		return NULL;
 	}
 
-	format = MB_PixelFormat( internalformat, &rgbOnly );
+	format = MB_PixelFormat( internalformat, &rgbOnly, &alphaOnly );
 
 	if ( level == 0 ) {
-		if ( !t->texture || t->width != width || t->height != height || t->format != format || t->rgbOnly != rgbOnly ) {
+		if ( !t->texture || t->width != width || t->height != height || t->format != format || t->rgbOnly != rgbOnly
+			|| t->alphaOnly != alphaOnly ) {
 			// a new image: a new texture (the old one lives until its frames are done)
 			if ( t->texture ) {
 				MB_Retire( (__bridge_transfer id)t->texture );
 				t->texture = NULL;
 			}
-			t->texture = (__bridge_retained void *)MB_NewTexture( format, width, height, 1, rgbOnly );
+			t->texture = (__bridge_retained void *)MB_NewTexture( format, width, height, 1, rgbOnly, alphaOnly );
 			if ( !t->texture ) {
 				return NULL;
 			}
@@ -3658,6 +3668,7 @@ static mbTexture_t *MB_DefineLevel( int level, int internalformat, int width, in
 			t->height = height;
 			t->format = format;
 			t->rgbOnly = rgbOnly;
+			t->alphaOnly = alphaOnly;
 			t->levels = 1;
 			t->definedLevels = 1;
 			t->usedSerial = t->blitSerial = 0;
@@ -3844,7 +3855,8 @@ void mbTexImage2D( int target, int level, int internalformat, int width, int hei
 		return;
 	}
 	pixels = MB_UnpackRGBA( width, height, format, pixels );
-	MB_WriteTexture( t, level, 0, 0, width, height, pixels, (NSUInteger)width * 4, (NSUInteger)width * height * 4, t->levels == 1 );
+	MB_WriteTexture( t, level, 0, 0, width, height, pixels, MB_LevelBytesPerRow( t->format, width ), MB_LevelBytes( t->format, width, height ),
+		t->levels == 1 );
 }
 
 void mbTexSubImage2D( int target, int level, int xoffset, int yoffset, int width, int height, int format, int type, const void *pixels )
@@ -3861,8 +3873,8 @@ void mbTexSubImage2D( int target, int level, int xoffset, int yoffset, int width
 		return;
 	}
 	pixels = MB_UnpackRGBA( width, height, format, pixels );
-	MB_WriteTexture( t, level, xoffset, yoffset, width, height, pixels, (NSUInteger)width * 4, (NSUInteger)width * height * 4,
-		t->levels == 1 && xoffset == 0 && yoffset == 0 && width == w && height == h );
+	MB_WriteTexture( t, level, xoffset, yoffset, width, height, pixels, MB_LevelBytesPerRow( t->format, width ),
+		MB_LevelBytes( t->format, width, height ), t->levels == 1 && xoffset == 0 && yoffset == 0 && width == w && height == h );
 }
 
 void mbCompressedTexImage2D( int target, int level, int internalformat, int width, int height, int border, int imageSize, const void *data )

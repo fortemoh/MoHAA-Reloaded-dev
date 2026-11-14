@@ -1766,6 +1766,7 @@ void Draw_TilePicOffset(float x, float y, float w, float h, qhandle_t hShader, i
 void Draw_TrianglePic(const vec2_t vPoints[3], const vec2_t vTexCoords[3], qhandle_t hShader);
 void DrawBox(float x, float y, float w, float h);
 void DrawBoxes(const float (*boxes)[4], int count, const float *color);
+void DrawTriangles2D(qhandle_t hShader, const vert2D_t *vertexes, int numVertexes, const unsigned short *indexes, int numIndexes);
 void AddBox(float x, float y, float w, float h);
 void Set2DWindow(int x, int y, int w, int h, float left, float right, float bottom, float top, float n, float f);
 
@@ -1776,6 +1777,9 @@ void RE_Scissor(int x, int y, int width, int height);
 void DrawLineLoop(const vec2_t* points, int count, int stipple_factor, int stipple_mask);
 void RE_StretchRaw(int x, int y, int w, int h, int cols, int rows, int components, const byte* data);
 void	RE_UploadCinematic (int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty);
+qhandle_t	RE_CreateImage2D( const char *name, int width, int height, int format, const byte *data );
+void		RE_UpdateImage2D( qhandle_t hShader, int x, int y, int width, int height, const byte *data );
+shader_t	*R_Create2DImageShader( const char *name, image_t *image );
 
 void		RE_BeginFrame( stereoFrame_t stereoFrame );
 void		RE_BeginRegistration( glconfig_t *glconfig );
