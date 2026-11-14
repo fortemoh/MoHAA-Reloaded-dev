@@ -23,8 +23,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // DESCRIPTION:
 // The Competitive HUD (cg_hudstyle 1): Project: Omaha's Competitive HUD pack
 // (ui/modern/huds/competitive.xml and the lib/ files it uses), laid out as
-// there at 1920x1080 and scaled with the screen's height, drawn by cgame
-// from the snapshot and its own state:
+// there at 1920x1080, fitted in the screen's width and height as Omaha's UI
+// is and times cg_hud_scale (Hud_ScaleOf), drawn by cgame from the snapshot
+// and its own state:
 //
 //   the radar top left (or the compass), the game messages under it; the
 //   score panel top center, the timer, who is alive and the players' cards
@@ -72,6 +73,7 @@ static cvar_t *cg_hud_attacker;
 static cvar_t *cg_hud_stopwatch;
 static cvar_t *cg_hud_damage;
 static cvar_t *cg_hud_lowhealth;
+static cvar_t *cg_hud_scale;
 
 static const struct {
     cvar_t    **var;
@@ -101,6 +103,7 @@ static const struct {
     {&cg_hud_stopwatch,     "cg_hud_stopwatch",     "1"  },
     {&cg_hud_damage,        "cg_hud_damage",        "1"  },
     {&cg_hud_lowhealth,     "cg_hud_lowhealth",     "0.4"},
+    {&cg_hud_scale,         "cg_hud_scale",         "1"  },
 };
 
 // the elements, in the order drawn
@@ -180,6 +183,7 @@ static struct {
     cvar_t        *uiCompass;
     qboolean       failed;      // no atlas: the stock HUD
     qboolean       radarLoaded; // the radar's walk done for this map
+    int            scaleCount;  // cg_hud_scale's modificationCount the scale is of
 
     // the damage's directions (Omaha: the last three, 1.5 s each)
     struct {
@@ -202,6 +206,35 @@ QUADS
 float Hud_Scale(void)
 {
     return hud.scale;
+}
+
+/*
+================
+Hud_ScaleOf
+
+Screen pixels a design pixel, as Project: Omaha's UI has it (UIR_RefPxScale
+and ui_scale): the 1920x1080 design fitted in the screen both ways, so on
+4:3 and 5:4 it is smaller instead of past the sides, times cg_hud_scale
+(0.25 to 2; not a number, 1), and 0.25 to 8 in all
+================
+*/
+static float Hud_ScaleOf(void)
+{
+    const int   w   = cgs.glconfig.vidWidth, h = cgs.glconfig.vidHeight;
+    const float fit = w > 0 && h > 0 ? Q_min(w / 1920.0f, h / 1080.0f) : 1.0f;
+    const char *s   = cg_hud_scale->string;
+    char       *end;
+    double      user;
+
+    user = strtod(s, &end);
+    while (*end == ' ' || *end == '\t') {
+        end++;
+    }
+    if (end == s || *end || user != user) {
+        user = 1.0;
+    }
+    user = user < 0.25 ? 0.25 : user > 2.0 ? 2.0 : user;
+    return Com_Clamp(0.25f, 8.0f, fit * (float)user);
 }
 
 hudColor_t Hud_Color(unsigned int rgba)
@@ -1317,9 +1350,11 @@ static void Hud_ElemRadar(void)
     // it turns with the view: made again when the view, what is on it or the damage's fade changed
     key.i((int)(fr.damageAlpha * 255.0f)).i(fr.damageAlpha > 0.0f ? (int)(fr.damageAngle * 100.0f) : 0);
     if (cg_hud_radar->integer) {
-        key.i(1).i((int64_t)HudRadar_Frame());
+        const float size = Px(S(248.0f));
+
+        key.i(1).i((int64_t)HudRadar_Frame(size));
         if (Hud_Begin(E_RADAR, key)) {
-            HudRadar_Draw(Px(S(25.0f)), Px(S(25.0f)), Px(S(248.0f)), fr.damageAngle, fr.damageAlpha);
+            HudRadar_Draw(Px(S(25.0f)), Px(S(25.0f)), size, fr.damageAngle, fr.damageAlpha);
         }
         return;
     }
@@ -2264,6 +2299,33 @@ static void Hud_Compact(void)
     hud.outVerts = at;
 }
 
+/*
+================
+Hud_Rescale
+
+cg_hud_scale changed: from this frame on at the new scale. The atlas's
+pictures are rasterized at the size drawn, so it is emptied (and every
+element, keyed by its generation, made again)
+================
+*/
+static qboolean Hud_Rescale(void)
+{
+    const float scale = Hud_ScaleOf();
+
+    hud.scaleCount = cg_hud_scale->modificationCount;
+    if (scale == hud.scale) {
+        return qtrue;
+    }
+    hud.scale = scale;
+    if (!HudAtlas_Rescale(scale)) {
+        cgi.Printf("Competitive HUD: no atlas, the stock HUD is drawn\n");
+        hud.ready  = qfalse;
+        hud.failed = qtrue;
+        return qfalse;
+    }
+    return qtrue;
+}
+
 qboolean CG_HudCompetitive_Active(void)
 {
     if (!cg_hudstyle || cg_hudstyle->integer != 1) {
@@ -2284,6 +2346,9 @@ void CG_HudCompetitive_Draw(void)
         return;
     }
     if (!hud.ready) {
+        return;
+    }
+    if (cg_hud_scale->modificationCount != hud.scaleCount && !Hud_Rescale()) {
         return;
     }
     if (!hud.radarLoaded && cg_hud_radar->integer) {
@@ -2330,7 +2395,7 @@ void CG_HudBounds_f(void)
                                                 "health", "badge", "ammo", "weapons", "banners", "stopwatch", "info", "vote",
                                                 "damage", "crosshair"};
 
-    cgi.Printf("Competitive HUD at %dx%d, %d quads\n", hud.w, hud.h, hud.outVerts / 4);
+    cgi.Printf("Competitive HUD at %dx%d, scale %.4g, %d quads\n", hud.w, hud.h, hud.scale, hud.outVerts / 4);
     for (int i = 0; i < E_COUNT; i++) {
         const hudElem_t &e = hud.elems[i];
         float            x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
@@ -2393,9 +2458,10 @@ static void Hud_Start(void)
     size_t i;
     int    q;
 
-    hud.w     = cgs.glconfig.vidWidth;
-    hud.h     = cgs.glconfig.vidHeight;
-    hud.scale = hud.h / 1080.0f;
+    hud.w          = cgs.glconfig.vidWidth;
+    hud.h          = cgs.glconfig.vidHeight;
+    hud.scale      = Hud_ScaleOf();
+    hud.scaleCount = cg_hud_scale->modificationCount;
     for (q = 0; q < HUD_DRAW_QUADS; q++) {
         hud.indexes[q * 6 + 0] = q * 4 + 0;
         hud.indexes[q * 6 + 1] = q * 4 + 1;
@@ -2407,7 +2473,7 @@ static void Hud_Start(void)
     for (i = 0; i < ARRAY_LEN(hud_weapons); i++) {
         wb.silhouette[i] = HudSilhouette_Find(hud_weapons[i].silhouette);
     }
-    if (!cgi.R_CreateImage2D || !HudAtlas_Begin()) {
+    if (!cgi.R_CreateImage2D || !HudAtlas_Begin(hud.scale)) {
         cgi.Printf("Competitive HUD: no atlas, the stock HUD is drawn\n");
         hud.failed = qtrue;
         return;

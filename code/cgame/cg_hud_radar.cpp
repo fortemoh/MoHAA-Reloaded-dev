@@ -88,8 +88,9 @@ static struct {
     qboolean     stale;
     int          seedTime;
     // the picture in the atlas
+    float        drawSize;             // the radar's pixels across it was made for
     int          size, regionX, regionY;
-    int          generation;
+    int          generation;           // the atlas's the square is in
     qboolean     uploaded;
     unsigned     picSerial, uploadedSerial; // a picture finished, the one in the atlas
     float        texX0, texY0, texUnits;
@@ -316,6 +317,7 @@ void HudRadar_MapLoaded(void)
     radar.numSolids = 0;
     radar.uploaded  = qfalse;
     radar.size      = 0;
+    radar.drawSize  = 0.0f;
     radar.loaded    = qtrue;
 
     cgi.R_GetInlineModelBounds(0, mins, maxs);
@@ -418,9 +420,57 @@ static void Radar_SeedFromPlayers(void)
 
 /*
 ================
+Radar_Region
+
+The picture's detail and its square in the atlas for a radar size pixels
+across: about three quarters of a pixel a texel, of what the radar can show
+from its middle and a little more. Before anything is written in the
+square: once the atlas was cleared (a new scale, or full) the old one holds
+other pictures, so another is asked for. A new detail drops the pictures
+made for the old one
+================
+*/
+static void Radar_Region(float size)
+{
+    float units;
+    int   texels, rx, ry;
+
+    if (size == radar.drawSize && radar.generation == HudAtlas_Generation()) {
+        return;
+    }
+    units  = RADAR_RANGE * 2.0f / size * 0.75f;
+    texels = Q_min(2048, ((int)(RADAR_PICTURE_HALF * 2.0f / units) + 7) & ~7);
+    if (fabsf(units - radar.unitsPerTexel) > radar.unitsPerTexel * 0.1f) {
+        radar.unitsPerTexel = units;
+        radar.stale         = qtrue;
+    }
+    if (texels != radar.size) {
+        radar_worker.Cancel();
+        radar_pic.done = false;
+        radar_back.row = -1;
+        radar.stale    = qtrue;
+    }
+    radar.drawSize = size;
+    radar.uploaded = qfalse;
+    radar.rows.clear();
+    if (HudAtlas_RadarRegion(texels, &rx, &ry)) {
+        radar.size    = texels;
+        radar.regionX = rx;
+        radar.regionY = ry;
+    } else {
+        radar.size = 0;
+    }
+    // (asking for it can clear the atlas: the generation after; with no room,
+    // not asked again until the size or the atlas changes)
+    radar.generation = HudAtlas_Generation();
+}
+
+/*
+================
 Radar_Upload
 
-The finished picture into the atlas's square: only its rows that changed
+The finished picture into the atlas's square (Radar_Region's, this frame):
+only its rows that changed
 ================
 */
 static void Radar_Upload(void)
@@ -428,17 +478,16 @@ static void Radar_Upload(void)
     const radarmap::Picture &pic = radar_pic;
     int                      row, first = -1;
 
-    if (!pic.done || pic.size != radar.size) {
+    if (!pic.done || !radar.size || pic.size != radar.size || radar.generation != HudAtlas_Generation()) {
         return;
     }
-    // only a new picture (or the region made again): compared row by row
-    if (radar.uploaded && radar.uploadedSerial == radar.picSerial && radar.generation == HudAtlas_Generation()) {
+    // only a new picture (or a new square): compared row by row
+    if (radar.uploaded && radar.uploadedSerial == radar.picSerial) {
         return;
     }
-    if (radar.generation != HudAtlas_Generation() || radar.rows.size() != (size_t)radar.size * radar.size) {
+    if (radar.rows.size() != (size_t)radar.size * radar.size) {
+        // a new square is 0 (the atlas's space is until used), as the rows are
         radar.rows.assign((size_t)radar.size * radar.size, 0);
-        radar.generation = HudAtlas_Generation();
-        // the region is 0 after a clear, as the rows are
     }
     for (row = 0; row <= radar.size; row++) {
         const bool changed = row < radar.size
@@ -610,10 +659,11 @@ static void Radar_AddObjectives(void)
 ================
 HudRadar_Frame
 
-What the radar shows this frame, and its walk and pictures
+What the radar shows this frame (size pixels across, as HudRadar_Draw
+draws it), and its walk and pictures
 ================
 */
-uint64_t HudRadar_Frame(void)
+uint64_t HudRadar_Frame(float size)
 {
     float    z;
     uint64_t key = 1469598103934665603ULL;
@@ -645,6 +695,8 @@ uint64_t HudRadar_Frame(void)
         radar.stale = qtrue;
     }
     Radar_SeedFromPlayers();
+    // the square first: the work starts pictures of its size, the upload writes in it
+    Radar_Region(size);
     Radar_Work(RADAR_FRAME_MS);
     Radar_Upload();
 
@@ -753,7 +805,8 @@ static void Radar_DrawMap(const radarPaint_t *p)
     static float            circle[N][2]; // the unit circle's points, made once
     float                   toTexel, u0, v0;
 
-    if (!radar.uploaded || radar.texUnits <= 0.0f) {
+    // (the atlas cleared since the upload: the elements are all made again)
+    if (!radar.uploaded || radar.texUnits <= 0.0f || radar.generation != HudAtlas_Generation()) {
         return;
     }
     if (!circle[0][0]) {
@@ -895,36 +948,7 @@ void HudRadar_Draw(float x, float y, float size, float damageAngle, float damage
     p.sinYaw = sinf(rad);
     p.cosYaw = cosf(rad);
 
-    // the picture's detail and place in the atlas: about three quarters of a
-    // pixel a texel, of what the radar can show from its middle and a little more
-    {
-        const float units = RADAR_RANGE * 2.0f / size * 0.75f;
-        const int   texels = Q_min(2048, ((int)(RADAR_PICTURE_HALF * 2.0f / units) + 7) & ~7);
-        int         rx, ry;
-
-        if (fabsf(units - radar.unitsPerTexel) > radar.unitsPerTexel * 0.1f) {
-            radar.unitsPerTexel = units;
-            radar.stale         = qtrue;
-        }
-        if (texels != radar.size || radar.generation != HudAtlas_Generation()) {
-            if (HudAtlas_RadarRegion(texels, &rx, &ry)) {
-                if (texels != radar.size) {
-                    radar_worker.Cancel();
-                    radar_pic.done = false;
-                    radar_back.row = -1;
-                    radar.stale    = qtrue;
-                }
-                radar.size     = texels;
-                radar.regionX  = rx;
-                radar.regionY  = ry;
-                radar.uploaded = qfalse;
-                radar.rows.clear();
-            } else {
-                radar.size = 0;
-            }
-        }
-    }
-
+    // (the picture's square: HudRadar_Frame's, of this size)
     Hud_Sprite(Radar_Shape(HUD_SHAPE_DISC, (int)(size + 0.5f), 0.0f), x, y, Hud_Color(0x0C0E12C7));
     Hud_Sprite(Radar_Shape(HUD_SHAPE_RING, (int)(size + 0.5f), p.k), x, y, Hud_Color(0xFFFFFF1A));
 
