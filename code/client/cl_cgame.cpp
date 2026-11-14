@@ -861,6 +861,9 @@ void CL_InitCGameDLL( clientGameImport_t *cgi, clientGameExport_t **cge ) {
 	cgi->CM_EntityString			= CM_EntityString;
 	cgi->GetConfigString			= CL_ConfigString;
 	cgi->R_DrawBoxes				= re.DrawBoxes;
+	cgi->R_CreateImage2D			= re.CreateImage2D;
+	cgi->R_UpdateImage2D			= re.UpdateImage2D;
+	cgi->R_DrawTriangles2D			= re.DrawTriangles2D;
 	// FIXME
 	//cgi->pUnknownVar				= NULL;
 

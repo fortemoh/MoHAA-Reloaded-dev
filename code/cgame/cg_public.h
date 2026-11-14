@@ -466,6 +466,15 @@ functions exported to the main executable
         // R_DrawBox for count boxes (x, y, width, height) in one draw, in the color given (the crosshair)
         void (*R_DrawBoxes)(const float (*boxes)[4], int count, const float *color);
 
+        // the renderer's CreateImage2D, UpdateImage2D and DrawTriangles2D (refexport_t): a texture from memory
+        // and its shader, its texels replaced, triangles of it in their own colors in one draw (the
+        // Competitive HUD, cg_hud_competitive.cpp)
+        qhandle_t (*R_CreateImage2D)(const char *name, int width, int height, int format, const byte *data);
+        void (*R_UpdateImage2D)(qhandle_t hShader, int x, int y, int width, int height, const byte *data);
+        void (*R_DrawTriangles2D)(
+            qhandle_t hShader, const vert2D_t *vertexes, int numVertexes, const unsigned short *indexes, int numIndexes
+        );
+
     } clientGameImport_t;
 
     /*
