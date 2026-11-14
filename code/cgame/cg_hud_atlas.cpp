@@ -718,69 +718,68 @@ const hudSprite_t *HudAtlas_Shape(hudShape_t shape, int w, int h, float p)
         HudPath_Circle(d * 0.5f, d * 0.5f, d * 0.5f, qfalse);
         HudPath_Circle(d * 0.5f, d * 0.5f, d * 0.5f - p, qtrue);
         break;
+    // the teams' icons: fortemoh/moh-icons team/allies.svg and team/axis.svg
+    // (viewBox 100 x 100), a layer a shape
     case HUD_SHAPE_ALLIES_0:
         HudPath_Circle(d * 0.5f, d * 0.5f, d * 0.5f, qfalse);
         break;
     case HUD_SHAPE_ALLIES_1:
-        HudPath_Circle(d * 0.5f, d * 0.5f, d * 0.465f, qfalse);
-        break;
-    case HUD_SHAPE_ALLIES_2:
         {
             static const float star[10][2] = {
-                {50.0f, 3.0f},
-                {60.55f, 35.48f},
-                {94.7f, 35.48f},
-                {67.07f, 55.55f},
-                {77.63f, 88.02f},
-                {50.0f, 67.95f},
-                {22.37f, 88.02f},
-                {32.93f, 55.55f},
-                {5.3f, 35.48f},
-                {39.45f, 35.48f},
+                {50.0f, 0.0f},
+                {61.226f, 34.549f},
+                {97.553f, 34.549f},
+                {68.164f, 55.902f},
+                {79.389f, 90.451f},
+                {50.0f, 69.098f},
+                {20.611f, 90.451f},
+                {31.836f, 55.902f},
+                {2.447f, 34.549f},
+                {38.774f, 34.549f},
             };
             HudPath_Polygon(star, 10, d / 100.0f, d / 100.0f, 0.0f, 0.0f);
         }
         break;
-    case HUD_SHAPE_ALLIES_3:
-        HudPath_Circle(d * 0.5f, d * 0.5f, d * 0.125f, qfalse);
+    case HUD_SHAPE_ALLIES_2:
+        HudPath_Circle(d * 0.5f, d * 0.5f, d * 0.15451f, qfalse);
         break;
     case HUD_SHAPE_AXIS_0:
         HudPath_Circle(d * 0.5f, d * 0.5f, d * 0.5f, qfalse);
         break;
     case HUD_SHAPE_AXIS_1:
         {
-            static const float cross[12][2] = {
-                {30.5f, 11.5f},
-                {69.5f, 11.5f},
-                {59.5f, 40.5f},
-                {88.5f, 30.5f},
-                {88.5f, 69.5f},
-                {59.5f, 59.5f},
-                {69.5f, 88.5f},
-                {30.5f, 88.5f},
-                {40.5f, 59.5f},
-                {11.5f, 69.5f},
-                {11.5f, 30.5f},
-                {40.5f, 40.5f},
+            static const float outline[12][2] = {
+                {28.979f, 10.0f},
+                {71.021f, 10.0f},
+                {61.763f, 38.237f},
+                {90.0f, 28.979f},
+                {90.0f, 71.021f},
+                {61.763f, 61.763f},
+                {71.021f, 90.0f},
+                {28.979f, 90.0f},
+                {38.237f, 61.763f},
+                {10.0f, 71.021f},
+                {10.0f, 28.979f},
+                {38.237f, 38.237f},
             };
-            HudPath_Polygon(cross, 12, d / 100.0f, d / 100.0f, 0.0f, 0.0f);
+            HudPath_Polygon(outline, 12, d / 100.0f, d / 100.0f, 0.0f, 0.0f);
         }
         break;
     case HUD_SHAPE_AXIS_2:
         {
             static const float cross[12][2] = {
-                {34.5f, 15.5f},
-                {65.5f, 15.5f},
-                {56.5f, 43.5f},
-                {84.5f, 34.5f},
-                {84.5f, 65.5f},
-                {56.5f, 56.5f},
-                {65.5f, 84.5f},
-                {34.5f, 84.5f},
-                {43.5f, 56.5f},
-                {15.5f, 65.5f},
-                {15.5f, 34.5f},
-                {43.5f, 43.5f},
+                {34.5f, 14.0f},
+                {65.5f, 14.0f},
+                {55.5f, 44.5f},
+                {86.0f, 34.5f},
+                {86.0f, 65.5f},
+                {55.5f, 55.5f},
+                {65.5f, 86.0f},
+                {34.5f, 86.0f},
+                {44.5f, 55.5f},
+                {14.0f, 65.5f},
+                {14.0f, 34.5f},
+                {44.5f, 44.5f},
             };
             HudPath_Polygon(cross, 12, d / 100.0f, d / 100.0f, 0.0f, 0.0f);
         }

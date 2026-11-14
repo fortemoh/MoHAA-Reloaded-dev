@@ -59,11 +59,10 @@ typedef struct {
 typedef enum {
     HUD_SHAPE_DISC,            // a circle filled, w across
     HUD_SHAPE_RING,            // a circle's edge, w across, p pixels thick (inside)
-    HUD_SHAPE_ALLIES_0,        // the Allies' roundel (lib/team_icons.xml): its four layers, w across
+    HUD_SHAPE_ALLIES_0,        // the Allies' roundel (moh-icons team/allies.svg): its three layers, w across
     HUD_SHAPE_ALLIES_1,
     HUD_SHAPE_ALLIES_2,
-    HUD_SHAPE_ALLIES_3,
-    HUD_SHAPE_AXIS_0,          // the Axis' cross: its three layers
+    HUD_SHAPE_AXIS_0,          // the Axis' cross (moh-icons team/axis.svg): its three layers
     HUD_SHAPE_AXIS_1,
     HUD_SHAPE_AXIS_2,
     HUD_SHAPE_BULLET,          // the ammo's bullet: a rounded bar w x h turned -45 degrees

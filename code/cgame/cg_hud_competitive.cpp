@@ -464,17 +464,18 @@ static hudColor_t Hud_TeamColor(int team)
 ================
 Hud_TeamIcon
 
-A team's icon (lib/team_icons.xml) d pixels across at x y, its layers each in its color
+A team's icon (fortemoh/moh-icons team/allies.svg, team/axis.svg: a full disc
+each) d pixels across at x y, its layers each in its color
 ================
 */
 static void Hud_TeamIcon(int team, float x, float y, int d, float alpha)
 {
-    static const unsigned int allies[4] = {0xD6D3EAFF, 0x271A71FF, 0xFFFFFFFF, 0x8C0101FF};
+    static const unsigned int allies[3] = {0x1A1E3BFF, 0xFFFFFFFF, 0xDE0000FF};
     static const unsigned int axis[3]   = {0xA90303FF, 0xFFFFFFFF, 0x000000FF};
     int                       i;
 
     if (team == TEAM_ALLIES) {
-        for (i = 0; i < 4; i++) {
+        for (i = 0; i < 3; i++) {
             Hud_Sprite(HudAtlas_Shape((hudShape_t)(HUD_SHAPE_ALLIES_0 + i), d, d, 0.0f), x, y, Hud_Fade(Hud_Color(allies[i]), alpha));
         }
     } else if (team == TEAM_AXIS) {
