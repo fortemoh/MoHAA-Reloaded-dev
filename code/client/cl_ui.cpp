@@ -117,6 +117,9 @@ cvar_t        *ui_itemsbar;
 cvar_t        *ui_health_start;
 cvar_t        *ui_health_end;
 cvar_t        *ui_gmboxspam;
+// Added: cgame's Competitive HUD (cg_hudstyle 1, cg_hud_competitive.cpp) draws the
+// weapons, items, health, ammo, compass, scores, timer, stopwatch, chat and game messages
+static cvar_t *cg_hudstyle;
 cvar_t        *ui_debugload;
 cvar_t        *sound_overlay;
 cvar_t        *ui_compass_scale;
@@ -1254,13 +1257,56 @@ void UI_GetHighResolutionScale(vec2_t scale)
 
 /*
 ====================
+UI_CompetitiveHud
+
+Added: whether cgame's Competitive HUD draws what the stock HUD's menus did
+====================
+*/
+static qboolean UI_CompetitiveHud(void)
+{
+    return cg_hudstyle && cg_hudstyle->integer == 1 ? qtrue : qfalse;
+}
+
+/*
+====================
+UI_HudReplaced
+
+Added: a HUD of the list the Competitive HUD draws in its own way
+====================
+*/
+static qboolean UI_HudReplaced(Menu *hud)
+{
+    static const char *const replaced[] = {
+        "hud_score", "hud_fraglimit", "hud_timelimit", "hud_stopwatch", "hud_fuse", "hud_fuse_wet",
+    };
+
+    if (!UI_CompetitiveHud()) {
+        return qfalse;
+    }
+    for (size_t i = 0; i < ARRAY_LEN(replaced); i++) {
+        if (!hud->m_name.icmp(replaced[i])) {
+            return qtrue;
+        }
+    }
+    return qfalse;
+}
+
+/*
+====================
 UI_ShowHudList
 ====================
 */
 void UI_ShowHudList(void)
 {
     for (int i = 1; i <= hudList.NumObjects(); i++) {
-        hudList.ObjectAt(i)->ForceShow();
+        Menu *hud = hudList.ObjectAt(i);
+
+        // Changed: not those the Competitive HUD replaces
+        if (UI_HudReplaced(hud)) {
+            hud->ForceHide();
+        } else {
+            hud->ForceShow();
+        }
     }
 }
 
@@ -2015,7 +2061,8 @@ void UI_Update(void)
         frame = uWinMan.getFrame();
         view3d->Display(frame, 1.0);
 
-        if (ui_hud && !view3d->LetterboxActive()) {
+        // Changed: not with the Competitive HUD, which cgame draws
+        if (ui_hud && !view3d->LetterboxActive() && !UI_CompetitiveHud()) {
             // draw the health hud
             if (hud_health) {
                 hud_health->ForceShow();
@@ -2052,12 +2099,13 @@ void UI_Update(void)
         }
     }
 
+    // Changed: the Competitive HUD shows the game messages, the chat and the kills itself
     if (gmbox) {
-        gmbox->setRealShow(true);
+        gmbox->setRealShow(!UI_CompetitiveHud());
     }
 
     if (dmbox) {
-        dmbox->setRealShow(true);
+        dmbox->setRealShow(!UI_CompetitiveHud());
     }
 
     currentMenu = menuManager.CurrentMenu();
@@ -2176,6 +2224,40 @@ void UI_Update(void)
         }
 
         UI_HideHudList();
+    } else if (UI_CompetitiveHud()) {
+        // Added: cgame's Competitive HUD draws the weapons, the items, the health, the ammo and the
+        // compass (the boss's health stays the stock HUD's)
+        if (crosshairhud) {
+            crosshairhud->ForceHide();
+        }
+        if (hud_weapons) {
+            hud_weapons->ForceHide();
+            ui_weapHudTime = 0;
+        }
+        if (hud_items) {
+            hud_items->ForceHide();
+            ui_itemHudTime = 0;
+        }
+        if (hud_health) {
+            hud_health->ForceHide();
+        }
+        if (hud_ammo) {
+            hud_ammo->ForceHide();
+        }
+        if (hud_compass) {
+            hud_compass->ForceHide();
+        }
+        if (hud_boss) {
+            if (cl.snap.ps.stats[STAT_BOSSHEALTH] > 0 && !hud_boss->isVisible()) {
+                Event *event = new Event(EV_ShowMenu);
+                event->AddInteger(false);
+                hud_boss->ProcessEvent(event);
+            } else if (hud_boss->isVisible()) {
+                hud_boss->ProcessEvent(EV_HideMenu);
+            }
+        }
+
+        UI_ShowHudList();
     } else {
         if (crosshairhud) {
             if (ui_crosshair->integer && cl.snap.ps.stats[STAT_CROSSHAIR]) {
@@ -5463,6 +5545,7 @@ void CL_InitializeUI(void)
     ui_NumHits             = Cvar_Get("ui_NumHits", "0", 0);
     ui_NumShotsFired       = Cvar_Get("ui_NumShotsFired", "0", 0);
     ui_gmboxspam           = Cvar_Get("ui_gmboxspam", "1", 0);
+    cg_hudstyle            = Cvar_Get("cg_hudstyle", "0", CVAR_ARCHIVE);
     ui_gotmedal            = Cvar_Get("ui_gotmedal", "0", 0);
     ui_success             = Cvar_Get("ui_success", "0", 0);
     ui_failed              = Cvar_Get("ui_failed", "0", 0);
