@@ -8628,7 +8628,11 @@ selects the sample count (see Implementation notes).
   render thread 252 and 271, GPU 408 and 409). The differences are
   within the runs' spread on a loaded machine: the same cost, though the
   Competitive HUD draws much more (the radar's map, the cards, the kill
-  feed) and about twice the 2D vertexes.
+  feed) and about twice the 2D vertexes. Timed directly (temporary timers,
+  the same demo): drawing the 2D batches when they end took the stock HUD
+  13.5 to 15.9 us a frame (26 batches; its unbatched boxes not counted),
+  the Competitive HUD's one batch 3.4 us; its cgame work 12.7 us a frame
+  with the view turning (the radar 4.0 of it).
 - **Light grid lookups** (`tr_light.c`, `R_GetLightingGridValue`; see
   Performance, Light grid lookups). A lookup blends the 8 light grid
   samples around a point: those of the 4 columns around it, at its row and
