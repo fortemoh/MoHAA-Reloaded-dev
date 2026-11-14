@@ -659,6 +659,7 @@ extern "C" {
     // cg_hud_competitive.cpp, cg_hud_feed.cpp: the Competitive HUD (cg_hudstyle 1)
     //
     void     CG_HudCompetitive_Init(void);     // at a map load / vid_restart, after the media
+    void     CG_HudCompetitive_Load(void);     // and the radar's walk, when it shows
     void     CG_HudCompetitive_Shutdown(void);
     qboolean CG_HudCompetitive_Active(void);   // it draws the HUD (the stock pieces it replaces don't)
     void     CG_HudCompetitive_Draw(void);     // last in CG_Draw2D

@@ -55,6 +55,8 @@ static struct {
     qboolean    wasPlaying;
     char        roundStart[64];
     int         rosterKey;
+    int         floodTime;
+    qboolean    floodOn; // sv_floodProtect: no score requests on a timer
 } feed;
 
 /*
@@ -635,8 +637,13 @@ static void HudFeed_RequestScores(void)
         return;
     }
     if (!feed.scoresWanted) {
-        flood = Info_ValueForKey(CG_ConfigString(CS_SERVERINFO), "sv_floodProtect");
-        if (!flood[0] || atoi(flood)) {
+        // (the server's info read again once a second at most)
+        if (cg.time < feed.floodTime || cg.time - feed.floodTime >= 1000) {
+            flood          = Info_ValueForKey(CG_ConfigString(CS_SERVERINFO), "sv_floodProtect");
+            feed.floodOn   = !flood[0] || atoi(flood);
+            feed.floodTime = cg.time;
+        }
+        if (feed.floodOn) {
             return;
         }
     }

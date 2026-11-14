@@ -91,6 +91,7 @@ static struct {
     int          size, regionX, regionY;
     int          generation;
     qboolean     uploaded;
+    unsigned     picSerial, uploadedSerial; // a picture finished, the one in the atlas
     float        texX0, texY0, texUnits;
     int          texW, texH;
     std::vector<byte> rows; // the region as uploaded
@@ -267,7 +268,9 @@ static void Radar_Work(double ms)
     if (!radar_map.Ready() || !radar.size) {
         return;
     }
-    radar_worker.Take(radar_pic);
+    if (radar_worker.Take(radar_pic)) {
+        radar.picSerial++;
+    }
     do {
         // the worker begins a picture from the map: it stands still meanwhile
         if (radar_worker.ReadsMap()) {
@@ -278,6 +281,7 @@ static void Radar_Work(double ms)
         } else if (radar_back.Busy()) {
             if (radarmap::Map::PictureRows(radar_back, 8)) {
                 std::swap(radar_pic, radar_back);
+                radar.picSerial++;
                 return;
             }
         } else if (radar_worker.Busy()) {
@@ -427,6 +431,10 @@ static void Radar_Upload(void)
     if (!pic.done || pic.size != radar.size) {
         return;
     }
+    // only a new picture (or the region made again): compared row by row
+    if (radar.uploaded && radar.uploadedSerial == radar.picSerial && radar.generation == HudAtlas_Generation()) {
+        return;
+    }
     if (radar.generation != HudAtlas_Generation() || radar.rows.size() != (size_t)radar.size * radar.size) {
         radar.rows.assign((size_t)radar.size * radar.size, 0);
         radar.generation = HudAtlas_Generation();
@@ -451,8 +459,9 @@ static void Radar_Upload(void)
     radar.texY0    = pic.y0;
     radar.texUnits = pic.unitsPerTexel;
     radar.texW     = pic.w;
-    radar.texH     = pic.h;
-    radar.uploaded = qtrue;
+    radar.texH           = pic.h;
+    radar.uploaded       = qtrue;
+    radar.uploadedSerial = radar.picSerial;
 }
 
 /*
@@ -604,12 +613,14 @@ HudRadar_Frame
 What the radar shows this frame, and its walk and pictures
 ================
 */
-void HudRadar_Frame(void)
+uint64_t HudRadar_Frame(void)
 {
-    float z;
+    float    z;
+    uint64_t key = 1469598103934665603ULL;
+    int      i;
 
     if (!radar.loaded || !cg.snap) {
-        return;
+        return 0;
     }
     VectorCopy(cg.validPPS ? cg.predicted_player_state.origin : cg.snap->ps.origin, radar.origin);
     radar.yaw      = cg.refdefViewAngles[YAW];
@@ -636,6 +647,32 @@ void HudRadar_Frame(void)
     Radar_SeedFromPlayers();
     Radar_Work(RADAR_FRAME_MS);
     Radar_Upload();
+
+    // what is drawn depends on: the view (to a hundredth of a degree and a
+    // tenth of a unit), the blips, the picture
+    auto mix = [&key](int64_t v) {
+        key ^= (uint64_t)v;
+        key *= 1099511628211ULL;
+        key ^= key >> 31;
+    };
+    mix((int64_t)(radar.yaw * 100.0f));
+    mix((int64_t)(radar.northYaw * 100.0f));
+    mix((int64_t)(radar.origin[0] * 10.0f));
+    mix((int64_t)(radar.origin[1] * 10.0f));
+    mix((int64_t)(radar.origin[2] * 10.0f));
+    mix(radar.uploaded ? (int64_t)radar.uploadedSerial : -1);
+    mix(radar.size);
+    for (i = 0; i < radar.numBlips; i++) {
+        const radarBlip_t *b = &radar.blips[i];
+
+        mix(b->kind);
+        mix(b->team);
+        mix((int64_t)(b->origin[0] * 10.0f));
+        mix((int64_t)(b->origin[1] * 10.0f));
+        mix((int64_t)(b->origin[2] * 10.0f));
+        mix((int64_t)(b->yaw * 100.0f));
+    }
+    return key;
 }
 
 /*
