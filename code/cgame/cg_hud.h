@@ -77,7 +77,10 @@ typedef enum {
     HUD_NUM_SHAPES
 } hudShape_t;
 
-qboolean           HudAtlas_Begin(void); // at a map load / vid_restart: the texture and the shader
+// the texture and the shader, at a map load / vid_restart, its size for the
+// HUD's scale (Hud_Scale)
+qboolean           HudAtlas_Begin(float scale);
+qboolean           HudAtlas_Rescale(float scale); // a new scale: emptied (made again when its size changes)
 void               HudAtlas_Shutdown(void);
 qhandle_t          HudAtlas_Shader(void);
 int                HudAtlas_Generation(void); // changes when the atlas is cleared: every sprite moved
@@ -185,5 +188,7 @@ void               HudFeed_Frame(void); // the score requests, the roster's chec
 
 void HudRadar_MapLoaded(void);
 void HudRadar_Shutdown(void);
-uint64_t HudRadar_Frame(void); // its walk and pictures, while the radar shows; returns a key of what it shows
+// its walk and pictures, while the radar shows size pixels across; returns a
+// key of what it shows
+uint64_t HudRadar_Frame(float size);
 void HudRadar_Draw(float x, float y, float size, float damageAngle, float damageAlpha);

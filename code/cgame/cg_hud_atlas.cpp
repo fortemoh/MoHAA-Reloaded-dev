@@ -29,8 +29,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // pixel size they are drawn at, the first time they are, then kept: each
 // change uploads its texels alone. A team icon's colors are layers, drawn one
 // over the other in their colors. The radar's picture of the map has a square
-// of its own (cg_hud_radar.cpp). When the atlas is full it is cleared and
-// everything rasterized again (HudAtlas_Generation).
+// of its own (cg_hud_radar.cpp). When the atlas is full, or the HUD's scale
+// changed (cg_hud_scale), it is cleared and everything rasterized again
+// (HudAtlas_Generation).
 
 #include "cg_hud.h"
 
@@ -244,16 +245,24 @@ const hudSprite_t *HudAtlas_White(void)
     return &atlas.white;
 }
 
-qboolean HudAtlas_Begin(void)
+// the atlas's side for the HUD at scale (screen pixels a design pixel): big
+// enough for a match's glyphs and pictures at that size, and the radar's
+// picture (a quarter of it at 1080 lines)
+static int HudAtlas_SizeFor(float scale)
 {
-    // big enough for a match's glyphs and pictures at the screen's size, and
-    // the radar's picture (a quarter of it at 1080 lines)
-    const int size = cgs.glconfig.vidHeight > 1200 ? 4096 : 2048;
-    int       limit = cgs.glconfig.maxTextureSize > 0 ? cgs.glconfig.maxTextureSize : size;
+    const int size  = scale * 1080.0f > 1200.0f ? 4096 : 2048;
+    const int limit = cgs.glconfig.maxTextureSize > 0 ? cgs.glconfig.maxTextureSize : size;
 
-    if (atlas.w != Q_min(size, limit)) {
+    return Q_min(size, limit);
+}
+
+qboolean HudAtlas_Begin(float scale)
+{
+    const int size = HudAtlas_SizeFor(scale);
+
+    if (atlas.w != size) {
         free(atlas.texels);
-        atlas.w = atlas.h = Q_min(size, limit);
+        atlas.w = atlas.h = size;
         atlas.texels      = (byte *)malloc((size_t)atlas.w * atlas.h);
         if (!atlas.texels) {
             atlas.w = atlas.h = 0;
@@ -266,6 +275,17 @@ qboolean HudAtlas_Begin(void)
     // the texture starts as the texels are: one upload
     atlas.shader = cgi.R_CreateImage2D(ATLAS_NAME, atlas.w, atlas.h, IMAGE2D_ALPHA, atlas.texels);
     return atlas.shader ? qtrue : qfalse;
+}
+
+qboolean HudAtlas_Rescale(float scale)
+{
+    if (!atlas.texels || !atlas.shader || atlas.w != HudAtlas_SizeFor(scale)) {
+        // another size: the texture made again
+        return HudAtlas_Begin(scale);
+    }
+    // the same texture emptied: all of it uploaded with the frame's changes
+    HudAtlas_Clear();
+    return qtrue;
 }
 
 void HudAtlas_Shutdown(void)
