@@ -22,6 +22,8 @@ licenses/opus
 licenses/opus/COPYING
 licenses/opusfile
 licenses/opusfile/COPYING
+licenses/oswald
+licenses/oswald/OFL.txt
 licenses/recastnavigation
 licenses/recastnavigation/License.txt
 licenses/zlib

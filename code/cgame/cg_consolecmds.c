@@ -503,6 +503,7 @@ static consoleCommand_t commands[] = {
     {"cg_dumpclassevents",     &CG_DumpClassEvents_f       },
     {"cg_dumpallclasses",      &CG_DumpAllClasses_f        },
     {"testemitter",            &CG_TestEmitter_f           },
+    {"hudbounds",              &CG_HudBounds_f             },
     {"triggertestemitter",     &CG_TriggerTestEmitter_f    },
     {"prevemittercommand",     &CG_PrevEmitterCommand_f    },
     {"nextemittercommand",     &CG_NextEmitterCommand_f    },

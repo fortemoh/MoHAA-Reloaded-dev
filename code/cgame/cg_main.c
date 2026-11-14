@@ -1107,6 +1107,9 @@ void CG_Init(clientGameImport_t *imported, int serverMessageNum, int serverComma
     // HUD setup
     CG_RefreshHudDrawElements();
     cgi.Cmd_Execute(EXEC_NOW, "ui_hud 1\n");
+
+    // Added: the Competitive HUD's atlas and the radar's walk, while the renderer registers
+    CG_HudCompetitive_Init();
 }
 
 /*
@@ -1118,6 +1121,7 @@ Called before every level change or subsystem restart
 */
 void CG_Shutdown(void)
 {
+    CG_HudCompetitive_Shutdown();
     L_ShutdownEvents();
     // Shutdown radar
     cgi.CL_InitRadar(NULL, NULL, -1);

@@ -278,6 +278,7 @@ void CG_ParseScores_ver_15()
         cgi.Cvar_Set("scoreboard_toggle2", va("%i", (int)atof(cgi.Argv(iCurrentEntry++))));
     }
 
+    CG_HudFeed_ScoresBegin();
     for (i = 0; i < iEntryCount; ++i) {
         bIsHeader = qfalse;
         if (cgs.gametype > GT_FFA) {
@@ -340,6 +341,9 @@ void CG_ParseScores_ver_15()
             Q_strncpyz(szString5, cgi.Argv(3 + iCurrentEntry + iDatumCount * i), sizeof(szString5));
             Q_strncpyz(szString6, cgi.Argv(4 + iCurrentEntry + iDatumCount * i), sizeof(szString6));
             Q_strncpyz(szString7, cgi.Argv(5 + iCurrentEntry + iDatumCount * i), sizeof(szString7));
+
+            // Added: who is alive, and the teams' scores, for the Competitive HUD
+            CG_HudFeed_ScoreEntry(iClientNum, iClientTeam, bIsDead, szString4);
 
             if (cgs.gametype >= GT_TEAM_ROUNDS && iClientNum == -1
                 && (iClientTeam == TEAM_ALLIES || iClientTeam == TEAM_AXIS)) {
@@ -520,6 +524,7 @@ void CG_ParseScores_ver_6()
         iEntryCount = MAX_CLIENTS;
     }
 
+    CG_HudFeed_ScoresBegin();
     for (i = 0; i < iEntryCount; ++i) {
         bIsHeader = qfalse;
         if (cgs.gametype > GT_FFA) {
@@ -563,6 +568,9 @@ void CG_ParseScores_ver_6()
             Q_strncpyz(szString4, cgi.Argv(3 + iCurrentEntry + iDatumCount * i), sizeof(szString4));
             Q_strncpyz(szString5, cgi.Argv(4 + iCurrentEntry + iDatumCount * i), sizeof(szString5));
             Q_strncpyz(szString6, cgi.Argv(5 + iCurrentEntry + iDatumCount * i), sizeof(szString6));
+
+            // Added: who is alive, and the teams' scores, for the Competitive HUD
+            CG_HudFeed_ScoreEntry(iClientNum, iClientTeam, bIsDead, szString3);
 
             if (iClientNum == cg.snap->ps.clientNum) {
                 pItemTextColor = vThisClientTextColor;
@@ -646,6 +654,7 @@ void CG_ParseScores()
     } else {
         CG_ParseScores_ver_6();
     }
+    CG_HudFeed_ScoresEnd();
 }
 
 void CG_InitScoresAPI(clientGameExport_t *cge)

@@ -46,7 +46,8 @@ Licenses and source
 
 OpenMoHAA is free software under the GNU General Public License, version 2 (COPYING.txt). The
 libraries built into it or shipped with it keep their own licenses, in licenses\ (SDL 3, libmad,
-the IJG JPEG library, libogg, libvorbis, opus, opusfile, zlib, Recast & Detour) and in
+the IJG JPEG library, libogg, libvorbis, opus, opusfile, zlib, Recast & Detour, and the
+Oswald font the Competitive HUD carries in cgame) and in
 OMAHA-SOUND-LICENSES.txt (miniaudio, libmysofa, PFFFT); the headphone sound set's license is in
 main\sound\prom\hrtf\. This software is based in part on the work of the Independent JPEG Group.
 MoHAA Launcher (mohlauncher.exe, built with Slint) is free software under the GNU General Public

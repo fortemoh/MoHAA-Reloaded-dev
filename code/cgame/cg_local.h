@@ -675,7 +675,24 @@ extern "C" {
     void CG_InitializeObjectives();
     void CG_DrawObjectives();
     void CG_UpdateCrosshair(void);
+    qboolean CG_CrosshairBoxes(const float (**arms)[4], const float **color);
     void CG_Draw2D(void);
+
+    //
+    // cg_hud_competitive.cpp, cg_hud_feed.cpp: the Competitive HUD (cg_hudstyle 1)
+    //
+    void     CG_HudCompetitive_Init(void);     // at a map load / vid_restart, after the media
+    void     CG_HudCompetitive_Shutdown(void);
+    qboolean CG_HudCompetitive_Active(void);   // it draws the HUD (the stock pieces it replaces don't)
+    void     CG_HudCompetitive_Draw(void);     // last in CG_Draw2D
+    void     CG_HudCompetitive_Pickup(const char *message); // "Picked Up <weapon>": the weapon not in hand's name
+    void     CG_HudBounds_f(void); // hudbounds: the elements' rectangles
+    void     CG_HudFeed_Reset(void);
+    void     CG_HudFeed_Print(const char *msg); // a line the server printed, its first byte its kind (MESSAGE_*)
+    void     CG_HudFeed_DeathMessage(const char *s1, const char *s2, const char *attacker, const char *victim, char type);
+    void     CG_HudFeed_ScoresBegin(void);
+    void     CG_HudFeed_ScoreEntry(int clientNum, int team, qboolean dead, const char *score);
+    void     CG_HudFeed_ScoresEnd(void);
 
     //
     // cg_draw.c
