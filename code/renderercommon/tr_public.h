@@ -28,7 +28,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 extern "C" {
 #endif
 
-#define	REF_API_VERSION		14
+#define	REF_API_VERSION		15	// 15: CreateImage2D, UpdateImage2D, DrawTriangles2D
 
 typedef struct dtiki_s dtiki_t;
 typedef struct skelAnimFrame_s skelAnimFrame_t;
@@ -195,6 +195,20 @@ typedef struct {
     void        (*WakeGPU)(void);
     // Added for the Metal port: DrawBox for count boxes (x, y, width, height) in one draw (the crosshair).
     void        (*DrawBoxes)(const float (*boxes)[4], int count, const float *color);
+
+    // A texture made from memory, width x height texels of format IMAGE2D_ALPHA or IMAGE2D_RGBA (rows top
+    // first, tightly packed; data NULL: undefined until UpdateImage2D), not mipmapped, clamped, filtered
+    // linearly, and a 2D shader of that name that draws it blended in the vertexes' colors (DrawTriangles2D).
+    // Made again with the same name (a map load), the texture is replaced. Call it while registering (the
+    // texture lasts until the next registration that doesn't make it).
+    qhandle_t (*CreateImage2D)(const char *name, int width, int height, int format, const byte *data);
+    // replaces width x height texels of hShader's texture at x, y (data in its format, rows tightly packed);
+    // the draws made before see the old texels
+    void (*UpdateImage2D)(qhandle_t hShader, int x, int y, int width, int height, const byte *data);
+    // numIndexes indexes (triangles) into numVertexes 2D vertexes drawn with hShader, a shader of
+    // CreateImage2D, in one draw (fewer than SHADER_MAX_VERTEXES vertexes and SHADER_MAX_INDEXES indexes a
+    // call: 511 quads)
+    void (*DrawTriangles2D)(qhandle_t hShader, const vert2D_t *vertexes, int numVertexes, const unsigned short *indexes, int numIndexes);
 } refexport_t;
 
 //

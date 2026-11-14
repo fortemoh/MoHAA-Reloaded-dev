@@ -70,6 +70,17 @@ typedef struct {
 	byte		modulate[4];
 } polyVert_t;
 
+// a vertex of DrawTriangles2D: screen pixels, texture coordinates, color
+typedef struct {
+	float		xy[2];
+	float		st[2];
+	byte		rgba[4];
+} vert2D_t;
+
+// the texels of CreateImage2D and UpdateImage2D
+#define IMAGE2D_ALPHA	1	// one byte: white with that alpha
+#define IMAGE2D_RGBA	4	// four bytes: red, green, blue, alpha
+
 typedef struct poly_s {
 	qhandle_t			hShader;
 	int					numVerts;
