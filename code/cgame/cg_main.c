@@ -1110,6 +1110,7 @@ void CG_Init(clientGameImport_t *imported, int serverMessageNum, int serverComma
 
     // Added: the Competitive HUD's atlas and the radar's walk, while the renderer registers
     CG_HudCompetitive_Init();
+    CG_HudCompetitive_Load();
 }
 
 /*

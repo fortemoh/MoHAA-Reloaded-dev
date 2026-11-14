@@ -185,5 +185,5 @@ void               HudFeed_Frame(void); // the score requests, the roster's chec
 
 void HudRadar_MapLoaded(void);
 void HudRadar_Shutdown(void);
-void HudRadar_Frame(void); // its walk and pictures; while the radar shows
+uint64_t HudRadar_Frame(void); // its walk and pictures, while the radar shows; returns a key of what it shows
 void HudRadar_Draw(float x, float y, float size, float damageAngle, float damageAlpha);

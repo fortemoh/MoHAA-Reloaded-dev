@@ -177,7 +177,9 @@ static struct {
     int            outVerts;
     unsigned short indexes[HUD_DRAW_QUADS * 6];
     float          skew; // text's slant: x moves this much a pixel up from the baseline
-    int            frame;
+    cvar_t        *uiCompass;
+    qboolean       failed;      // no atlas: the stock HUD
+    qboolean       radarLoaded; // the radar's walk done for this map
 
     // the damage's directions (Omaha: the last three, 1.5 s each)
     struct {
@@ -186,6 +188,8 @@ static struct {
     } arcs[3];
     int lastDamageDir, lastDamageHealth, damageFlashTime;
 } hud;
+
+static void Hud_Start(void);
 
 /*
 ====================================================================
@@ -899,11 +903,20 @@ static hudFrame_t fr;
 
 static void Hud_SpectatorText(void)
 {
+    static int  lastFlags = -1, lastTeam = -1, lastTime;
     const int   pmFlags = cg.predicted_player_state.pm_flags;
     const int   team    = cg.snap->ps.stats[STAT_TEAM];
     int         key1, key2;
     const char *text;
 
+    // made again when what it says changes (and once a second, for a key bound again)
+    if ((pmFlags & (PMF_SPECTATING | PMF_CAMERA_VIEW)) == lastFlags && team == lastTeam && cg.time >= lastTime
+        && cg.time - lastTime < 1000) {
+        return;
+    }
+    lastFlags = pmFlags & (PMF_SPECTATING | PMF_CAMERA_VIEW);
+    lastTeam  = team;
+    lastTime  = cg.time;
     fr.spectatorText[0] = 0;
     if (!(pmFlags & PMF_SPECTATING)) {
         return;
@@ -1260,19 +1273,27 @@ static void Hud_ElemRadar(void)
         Hud_Hide(E_RADAR);
         return;
     }
-    // it turns with the view: made again each frame it shows
-    key.i(++hud.frame);
+    // it turns with the view: made again when the view, what is on it or the damage's fade changed
+    key.i((int)(fr.damageAlpha * 255.0f)).i(fr.damageAlpha > 0.0f ? (int)(fr.damageAngle * 100.0f) : 0);
     if (cg_hud_radar->integer) {
-        HudRadar_Frame();
-        Hud_Begin(E_RADAR, key);
-        HudRadar_Draw(Px(S(25.0f)), Px(S(25.0f)), Px(S(248.0f)), fr.damageAngle, fr.damageAlpha);
+        key.i(1).i((int64_t)HudRadar_Frame());
+        if (Hud_Begin(E_RADAR, key)) {
+            HudRadar_Draw(Px(S(25.0f)), Px(S(25.0f)), Px(S(248.0f)), fr.damageAngle, fr.damageAlpha);
+        }
         return;
     }
-    if (!cgi.Cvar_Find("ui_compass") || !cgi.Cvar_Find("ui_compass")->integer) {
+    if (!hud.uiCompass) {
+        hud.uiCompass = cgi.Cvar_Get("ui_compass", "1", 0);
+    }
+    if (!hud.uiCompass->integer) {
         Hud_Hide(E_RADAR);
         return;
     }
-    Hud_Begin(E_RADAR, key);
+    key.i(2).i((int)(anglemod(fr.viewYaw - fr.ps->stats[STAT_COMPASSNORTH] / 182.0f) * 100.0f));
+    key.i(fr.ps->stats[STAT_OBJECTIVECENTER]).i(fr.ps->stats[STAT_OBJECTIVELEFT]).i(fr.ps->stats[STAT_OBJECTIVERIGHT]);
+    if (!Hud_Begin(E_RADAR, key)) {
+        return;
+    }
     {
         static const char *const labels[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
         const float              size  = Px(S(160.0f));
@@ -2204,7 +2225,14 @@ static void Hud_Compact(void)
 
 qboolean CG_HudCompetitive_Active(void)
 {
-    return cg_hudstyle && cg_hudstyle->integer == 1 && hud.ready;
+    if (!cg_hudstyle || cg_hudstyle->integer != 1) {
+        return qfalse;
+    }
+    // chosen in the middle of a map: made now (the stock HUD's pieces are already hidden)
+    if (!hud.ready && !hud.failed && cg.snap) {
+        Hud_Start();
+    }
+    return hud.ready;
 }
 
 void CG_HudCompetitive_Draw(void)
@@ -2216,6 +2244,11 @@ void CG_HudCompetitive_Draw(void)
     }
     if (!hud.ready) {
         return;
+    }
+    if (!hud.radarLoaded && cg_hud_radar->integer) {
+        // the map's walk the first time the radar shows (with the map's load when it is on)
+        HudRadar_MapLoaded();
+        hud.radarLoaded = qtrue;
     }
 
     Hud_GatherFrame();
@@ -2277,7 +2310,6 @@ void CG_HudBounds_f(void)
 void CG_HudCompetitive_Init(void)
 {
     size_t i;
-    int    q;
 
     for (i = 0; i < ARRAY_LEN(hud_cvars); i++) {
         *hud_cvars[i].var = cgi.Cvar_Get(hud_cvars[i].name, hud_cvars[i].value, CVAR_ARCHIVE);
@@ -2290,6 +2322,7 @@ void CG_HudCompetitive_Init(void)
         hud.elems[i].first = 0;
     }
     hud.ready          = qfalse;
+    hud.radarLoaded    = qfalse;
     hud.outVerts       = 0;
     hud.lastDamageDir  = -999999;
     hud.lastDamageHealth = -1;
@@ -2299,10 +2332,26 @@ void CG_HudCompetitive_Init(void)
     wb.follow = -3;
     Hud_ClearWeapons();
 
-    // the style is chosen with the map: nothing made for the stock HUD
-    if (cg_hudstyle->integer != 1) {
-        return;
+    hud.failed = qfalse;
+    // nothing made for the stock HUD; chosen later in the map, made at its first frame
+    if (cg_hudstyle->integer == 1) {
+        Hud_Start();
     }
+}
+
+/*
+================
+Hud_Start
+
+The atlas (and the radar's walk when it shows): at the load, or at the first
+frame drawn with cg_hudstyle 1
+================
+*/
+static void Hud_Start(void)
+{
+    size_t i;
+    int    q;
+
     hud.w     = cgs.glconfig.vidWidth;
     hud.h     = cgs.glconfig.vidHeight;
     hud.scale = hud.h / 1080.0f;
@@ -2319,10 +2368,18 @@ void CG_HudCompetitive_Init(void)
     }
     if (!cgi.R_CreateImage2D || !HudAtlas_Begin()) {
         cgi.Printf("Competitive HUD: no atlas, the stock HUD is drawn\n");
+        hud.failed = qtrue;
         return;
     }
-    HudRadar_MapLoaded();
     hud.ready = qtrue;
+}
+
+void CG_HudCompetitive_Load(void)
+{
+    if (hud.ready && cg_hud_radar->integer && !hud.radarLoaded) {
+        HudRadar_MapLoaded();
+        hud.radarLoaded = qtrue;
+    }
 }
 
 void CG_HudCompetitive_Shutdown(void)
