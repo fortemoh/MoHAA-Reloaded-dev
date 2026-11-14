@@ -8617,6 +8617,18 @@ selects the sample count (see Implementation notes).
   counted in `vk_draw`; `backEnd.in2D` from `Set2DWindow`). The frame log
   and `renderer_timed.so` time `DrawTriangles2D` and `UpdateImage2D` as
   2D calls.
+  Measured 2026-11-14 on a 40 s `dm/mohdm1` round match demo with nine
+  bots (1920x1080, AMD 780M, uncapped, the same frames by `fixedtime`):
+  2D draws a frame, stock HUD 27 (median, 26 to 29), Competitive HUD 1
+  (with `cg_hud 0` none); GPU draws a frame 141 and 115 at `r_smp 0`,
+  134 and 99 at `r_smp 1`. Frame times from the frame log, three runs of
+  each interleaved, medians: at `r_smp 0` 703 and 692 us (cgame and UI 106
+  and 94 us, GPU 483 and 478); at `r_smp 1` 447 and 461 us (main thread's
+  cgame and UI 77 and 71, its 2D calls 6 and 2, EndFrame's wait for the
+  render thread 252 and 271, GPU 408 and 409). The differences are
+  within the runs' spread on a loaded machine: the same cost, though the
+  Competitive HUD draws much more (the radar's map, the cards, the kill
+  feed) and about twice the 2D vertexes.
 - **Light grid lookups** (`tr_light.c`, `R_GetLightingGridValue`; see
   Performance, Light grid lookups). A lookup blends the 8 light grid
   samples around a point: those of the 4 columns around it, at its row and
