@@ -4030,6 +4030,11 @@ void vk_draw( primType_t prim, const drawGeometry_t *geometry, int numIndexes, c
 		qvkCmdDrawIndexed( cmd, numIndexes, 1, VK_UploadGeometry( cmd, geometry, numIndexes, indexes, ( key.bits & VK_PIPE_NORMALS ) != 0 ), 0, slots );
 	}
 	vk.stats.draws++;
+	backEnd.pc.c_draws++;
+	if ( backEnd.in2D ) {
+		backEnd.pc.c_draws2D++;
+		backEnd.pc.c_vertexes2D += geometry->numVertexes;
+	}
 }
 
 /*

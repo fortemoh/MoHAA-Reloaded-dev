@@ -198,6 +198,9 @@ void R_ImageList_f( void ) {
 		case TEXFMT_BC3:
 			ri.Printf( PRINT_ALL, "DXT5 " );
 			break;
+		case TEXFMT_A8:
+			ri.Printf( PRINT_ALL, "A8   " );
+			break;
 		default:
 			ri.Printf( PRINT_ALL, "???? " );
 		}
@@ -959,6 +962,101 @@ void R_UploadScratchImage( image_t *image, int cols, int rows, const byte *data,
 	} else if ( dirty ) {
 		vk_upload_texture( image, 0, 0, 0, cols, rows, data );
 	}
+}
+
+
+/*
+================
+RE_CreateImage2D
+
+A texture from memory and a 2D shader of the same name drawing it in the
+vertexes' colors (DrawTriangles2D): the cgame's own pictures (its HUD's
+atlas). Made again with the same name, the image is kept (its storage
+replaced when the size or format changed) and its shader made again if the
+registration dropped it (R_SetupShaders)
+================
+*/
+qhandle_t RE_CreateImage2D( const char *name, int width, int height, int format, const byte *data ) {
+	image_t		*image;
+	texFormat_t	texFormat;
+	shader_t	*sh;
+	long		hash;
+	int			i;
+
+	if ( !name || !name[0] || strlen( name ) >= MAX_QPATH || width <= 0 || height <= 0
+		|| width > glConfig.maxTextureSize || height > glConfig.maxTextureSize
+		|| ( format != IMAGE2D_ALPHA && format != IMAGE2D_RGBA ) ) {
+		ri.Printf( PRINT_WARNING, "WARNING: RE_CreateImage2D: bad image \"%s\" %dx%d format %d\n", name ? name : "", width, height, format );
+		return 0;
+	}
+	texFormat = format == IMAGE2D_ALPHA ? TEXFMT_A8 : TEXFMT_RGBA8;
+
+	hash = generateHashValue( name );
+	for ( image = hashTable[hash]; image; image = image->next ) {
+		if ( !strcmp( name, image->imgName ) ) {
+			break;
+		}
+	}
+
+	if ( !image ) {
+		for ( i = 0; i < tr.numImages; i++ ) {
+			if ( !tr.images[i].imgName[0] ) {
+				break;
+			}
+		}
+		if ( i == tr.numImages ) {
+			if ( tr.numImages == MAX_DRAWIMAGES ) {
+				ri.Printf( PRINT_WARNING, "WARNING: RE_CreateImage2D: MAX_DRAWIMAGES hit\n" );
+				return 0;
+			}
+			tr.numImages++;
+		}
+		image = &tr.images[i];
+		Com_Memset( image, 0, sizeof( *image ) );
+		Q_strncpyz( image->imgName, name, sizeof( image->imgName ) );
+		image->next = hashTable[hash];
+		hashTable[hash] = image;
+	}
+
+	if ( !image->texnum || image->uploadWidth != width || image->uploadHeight != height || image->internalFormat != texFormat ) {
+		image->width = image->uploadWidth = width;
+		image->height = image->uploadHeight = height;
+		image->numMipmaps = 0;
+		image->internalFormat = texFormat;
+		image->wrapClampModeX = WRAP_CLAMP;
+		image->wrapClampModeY = WRAP_CLAMP;
+		image->bytesUsed = width * height * format;
+		vk_create_texture( image, width, height, 1, texFormat );
+	}
+	if ( data ) {
+		vk_upload_texture( image, 0, 0, 0, width, height, data );
+	}
+	image->r_sequence = r_sequencenumber;
+
+	sh = R_Create2DImageShader( name, image );
+	return sh ? sh->index : 0;
+}
+
+/*
+================
+RE_UpdateImage2D
+
+Replaces texels of the texture of a shader of RE_CreateImage2D
+================
+*/
+void RE_UpdateImage2D( qhandle_t hShader, int x, int y, int width, int height, const byte *data ) {
+	shader_t	*sh;
+	image_t		*image;
+
+	sh = R_GetShaderByHandle( hShader );
+	if ( !data || !sh || !sh->unfoggedStages[0] || !( image = sh->unfoggedStages[0]->bundle[0].image[0] ) || !image->texnum
+		|| ( image->internalFormat != TEXFMT_A8 && image->internalFormat != TEXFMT_RGBA8 ) ) {
+		return;
+	}
+	// the open 2D batch is drawn with the texels it was made with
+	R_FrontEndSync();
+	R_End2DBatch();
+	vk_upload_texture( image, 0, x, y, width, height, data );
 }
 
 

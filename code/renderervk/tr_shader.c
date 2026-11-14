@@ -3624,6 +3624,71 @@ shader_t* R_FindShader(const char* name, int lightmapIndex, qboolean mipRawImage
 }
 
 
+/*
+===============
+R_Create2DImageShader
+
+The shader of RE_CreateImage2D: the image blended in the vertexes' own
+colors (rgbGen exactVertex, alphaGen vertex), so 2D draws of it in any
+colors stay one batch (R_2DShaderBatchable, R2D_STREAM). Its existing
+shader when it has one for this image
+===============
+*/
+shader_t *R_Create2DImageShader( const char *name, image_t *image ) {
+	char			strippedName[MAX_QPATH];
+	int				i, j, hash;
+	shader_t		*sh;
+
+	COM_StripExtension( name, strippedName, sizeof( strippedName ) );
+	hash = generateHashValue( strippedName );
+
+	for ( currentShader = hashTable[hash]; currentShader; currentShader = currentShader->next ) {
+		if ( !Q_stricmp( currentShader->name, strippedName ) ) {
+			break;
+		}
+	}
+	if ( currentShader ) {
+		for ( sh = currentShader->shader; sh; sh = sh->next ) {
+			if ( sh != tr.defaultShader && sh->lightmapIndex == LIGHTMAP_2D && sh->unfoggedStages[0]
+				&& sh->unfoggedStages[0]->bundle[0].image[0] == image ) {
+				currentShader = NULL;
+				return sh;
+			}
+		}
+	} else {
+		currentShader = AddShaderTextToHash( strippedName, hash );
+	}
+
+	Com_Memset( &shader, 0, sizeof( shader ) );
+	Com_Memset( &unfoggedStages, 0, sizeof( unfoggedStages ) );
+	Com_Memset( &texMods, 0, sizeof( texMods ) );
+
+	shader.sprite.scale = 1.0;
+	shader_noPicMip = qtrue;
+	shader_noMipMaps = qtrue;
+	shader_force32bit = qfalse;
+	Q_strncpyz( shader.name, strippedName, sizeof( shader.name ) );
+	shader.lightmapIndex = LIGHTMAP_2D;
+	for ( i = 0; i < MAX_SHADER_STAGES; i++ ) {
+		for ( j = 0; j < NUM_TEXTURE_BUNDLES; j++ ) {
+			unfoggedStages[i].bundle[j].texMods = texMods[i];
+		}
+	}
+	shader.needsNormal = qfalse;
+	shader.needsST1 = qtrue;
+	shader.needsST2 = qfalse;
+	shader.needsColor = qtrue;
+
+	unfoggedStages[0].bundle[0].image[0] = image;
+	unfoggedStages[0].active = qtrue;
+	unfoggedStages[0].rgbGen = CGEN_EXACT_VERTEX;
+	unfoggedStages[0].alphaGen = AGEN_VERTEX;
+	unfoggedStages[0].stateBits = GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+
+	return FinishShader();
+}
+
+
 /* 
 ====================
 RE_RegisterShader

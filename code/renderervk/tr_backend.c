@@ -1588,6 +1588,7 @@ void RB_ExecuteRenderCommands( const void *data ) {
 		case RC_2D_ADD_BOX:
 		case RC_2D_DRAW_BOX:
 		case RC_2D_DRAW_BOXES:
+		case RC_2D_TRIANGLES:
 		case RC_2D_LINE_LOOP:
 		case RC_2D_WINDOW:
 		case RC_2D_SCISSOR:

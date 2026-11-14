@@ -286,6 +286,12 @@ static void RT_AddBox( float x, float y, float w, float h ) {
 static void RT_DrawBoxes( const float (*boxes)[4], int count, const float *color ) {
 	RT_2D( rt_real.DrawBoxes( boxes, count, color ) )
 }
+static void RT_DrawTriangles2D( qhandle_t hShader, const vert2D_t *vertexes, int numVertexes, const unsigned short *indexes, int numIndexes ) {
+	RT_2D( rt_real.DrawTriangles2D( hShader, vertexes, numVertexes, indexes, numIndexes ) )
+}
+static void RT_UpdateImage2D( qhandle_t hShader, int x, int y, int width, int height, const byte *data ) {
+	RT_2D( rt_real.UpdateImage2D( hShader, x, y, width, height, data ) )
+}
 static void RT_Scissor( int x, int y, int width, int height ) {
 	RT_2D( rt_real.Scissor( x, y, width, height ) )
 }
@@ -392,6 +398,8 @@ Q_EXPORT refexport_t *QDECL GetRefAPI( int apiVersion, refimport_t *rimp ) {
 	rt_export.DrawBox = RT_DrawBox;
 	rt_export.AddBox = RT_AddBox;
 	rt_export.DrawBoxes = RT_DrawBoxes;
+	rt_export.DrawTriangles2D = RT_DrawTriangles2D;
+	rt_export.UpdateImage2D = RT_UpdateImage2D;
 	rt_export.Scissor = RT_Scissor;
 	rt_export.DrawLineLoop = RT_DrawLineLoop;
 	rt_export.DrawString = RT_DrawString;

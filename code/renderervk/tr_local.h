@@ -1382,6 +1382,10 @@ typedef struct {
 	int		c_flareTests;
 	int		c_flareRenders;
 
+	int		c_draws;		// GPU draws (vk_draw), r_speeds 7
+	int		c_draws2D;		// of those, in 2D (Set2DWindow)
+	int		c_vertexes2D;	// their vertexes
+
 	int		msec;			// total msec for backend run
 } backEndCounters_t;
 
@@ -1947,6 +1951,7 @@ void Draw_TrianglePic(const vec2_t vPoints[3], const vec2_t vTexCoords[3], qhand
 void DrawBox(float x, float y, float w, float h);
 void AddBox(float x, float y, float w, float h);
 void DrawBoxes(const float (*boxes)[4], int count, const float *color);
+void DrawTriangles2D(qhandle_t hShader, const vert2D_t *vertexes, int numVertexes, const unsigned short *indexes, int numIndexes);
 void Set2DWindow(int x, int y, int w, int h, float left, float right, float bottom, float top, float n, float f);
 
 // Added in OPM
@@ -1990,6 +1995,9 @@ model_t		*R_AllocModel( void );
 void    	R_Init( void );
 
 void		R_UploadScratchImage( image_t *image, int cols, int rows, const byte *data, qboolean dirty );
+qhandle_t	RE_CreateImage2D( const char *name, int width, int height, int format, const byte *data );
+void		RE_UpdateImage2D( qhandle_t hShader, int x, int y, int width, int height, const byte *data );
+shader_t	*R_Create2DImageShader( const char *name, image_t *image );
 image_t		*R_FindImageFileOld(const char* name, qboolean mipmap, qboolean allowPicmip, qboolean force32bit, int glWrapClampModeX, int glWrapClampModeY);
 image_t		*R_RefreshImageFileOld(const char* name, qboolean mipmap, qboolean allowPicmip, qboolean force32bit, int glWrapClampModeX, int glWrapClampModeY);
 
@@ -2828,6 +2836,13 @@ typedef struct {
 
 typedef struct {
 	int		commandId;
+	qhandle_t	hShader;
+	int		numVertexes;	// vert2D_t vertexes[numVertexes] follow, then unsigned short indexes[numIndexes]
+	int		numIndexes;
+} triangles2DCommand_t;
+
+typedef struct {
+	int		commandId;
 	int		count;			// vec2_t points[count] follow
 	int		stippleFactor, stippleMask;
 } lineLoop2DCommand_t;
@@ -2930,6 +2945,7 @@ typedef enum {
 	RC_2D_ADD_BOX,
 	RC_2D_DRAW_BOX,
 	RC_2D_DRAW_BOXES,
+	RC_2D_TRIANGLES,
 	RC_2D_LINE_LOOP,
 	RC_2D_WINDOW,
 	RC_2D_SCISSOR,

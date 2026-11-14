@@ -109,7 +109,9 @@ typedef enum {
 	TEXFMT_BC1_RGB,		// DXT1, pre-compressed data
 	TEXFMT_BC1_RGBA,	// DXT1 with 1-bit alpha, pre-compressed data
 	TEXFMT_BC2,			// DXT3, pre-compressed data
-	TEXFMT_BC3			// DXT5, pre-compressed data
+	TEXFMT_BC3,			// DXT5, pre-compressed data
+	TEXFMT_A8			// one byte a texel, sampled as white with that alpha (CreateImage2D);
+						// vk_upload_texture takes one byte a texel for it
 } texFormat_t;
 
 // texture wrap mode, stored in image_t::wrapClampModeX/Y
@@ -136,8 +138,8 @@ typedef enum {
 // for mipmapped textures, anisotropy from r_ext_texture_filter_anisotropic
 // and r_ext_max_anisotropy.
 void		vk_create_texture( image_t *image, int width, int height, int mipLevels, texFormat_t format );
-// upload RGBA8 pixels (rows tightly packed, top row first) to a region of
-// one mip level. Uploads may happen in the middle of a frame: draws recorded
+// upload RGBA8 pixels (rows tightly packed, top row first; TEXFMT_A8: one
+// byte a texel) to a region of one mip level. Uploads may happen in the middle of a frame: draws recorded
 // before the upload see the old contents, draws after it the new ones.
 void		vk_upload_texture( image_t *image, int mipLevel, int x, int y, int width, int height, const byte *rgba );
 // upload one complete mip level of a BC-compressed texture

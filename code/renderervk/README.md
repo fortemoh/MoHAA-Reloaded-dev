@@ -8588,6 +8588,35 @@ selects the sample count (see Implementation notes).
   `metal`'s: the color goes through the 2D color's conversion, the API
   version, the tools' wrappers and the load's registration are this
   branch's, the cgame code is the same.
+- **Cgame's own 2D images** (`RE_CreateImage2D`, `RE_UpdateImage2D` in
+  `tr_image.c`, `R_Create2DImageShader` in `tr_shader.c`, `DrawTriangles2D`
+  in `tr_draw.c`; 2026-11-14, for the Competitive HUD, `cg_hudstyle 1`).
+  Three exports at the end of `refexport_t` (`REF_API_VERSION` 17, cgame
+  imports `R_CreateImage2D`, `R_UpdateImage2D`, `R_DrawTriangles2D`).
+  `CreateImage2D` makes an image from memory under a name (a `*` one: no
+  file is looked for), clamped, unmipmapped (so filtered linearly), and a
+  2D shader for it: one stage, `rgbGen exactVertex`, `alphaGen vertex`,
+  blended. Made again with the same name it keeps the image (new storage
+  when the size or format changed) and touches its registration sequence,
+  so it lives as long as cgame makes it at each load. Its format
+  `IMAGE2D_ALPHA` is `TEXFMT_A8`: `VK_FORMAT_R8_UNORM` with the view's
+  swizzle (1, 1, 1, R), white with the texel as alpha, a byte a texel in
+  memory and in uploads; without `imageViewFormatSwizzle` (the portability
+  subset) it is stored as RGBA and `vk_upload_texture` widens the texels.
+  `UpdateImage2D` draws the open 2D batch first (it was made with the old
+  texels), then uploads the rectangle like any other texture upload.
+  `DrawTriangles2D` writes the vertexes straight into `tess` through
+  `R_Begin2D` as a stream draw (`R2D_STREAM`): the shader's per-vertex
+  colors pass `R_2DShaderBatchable`, so consecutive calls with the same
+  shader stay one surface, one GPU draw, whatever their colors (the
+  colors are scaled by `tr.identityLightByte` as `Draw_SetColor` scales
+  the 2D color). A call holds fewer than `SHADER_MAX_VERTEXES` vertexes
+  (511 quads); with `r_smp` it is recorded as a command with its
+  vertexes and indexes (`RC_2D_TRIANGLES`). `r_speeds 7` prints the
+  frame's GPU draws, its 2D draws and their vertexes (`backEnd.pc`,
+  counted in `vk_draw`; `backEnd.in2D` from `Set2DWindow`). The frame log
+  and `renderer_timed.so` time `DrawTriangles2D` and `UpdateImage2D` as
+  2D calls.
 - **Light grid lookups** (`tr_light.c`, `R_GetLightingGridValue`; see
   Performance, Light grid lookups). A lookup blends the 8 light grid
   samples around a point: those of the 4 columns around it, at its row and

@@ -680,6 +680,73 @@ void RB_DrawBoxes(const float (*boxes)[4], int count, const float *color) {
 
 /*
 ================
+DrawTriangles2D
+
+Triangles of a shader of RE_CreateImage2D in their own colors (the cgame's
+HUD): straight into the open 2D batch when the shader is the batch's (a
+stream draw: R2D_STREAM), else a new batch. The colors as Draw_SetColor
+takes them (rgb by the identity light)
+================
+*/
+void RB_DrawTriangles2D( qhandle_t hShader, const vert2D_t *vertexes, int numVertexes, const unsigned short *indexes, int numIndexes ) {
+	shader_t	*shader;
+	int			firstVertex, i;
+
+	if ( numVertexes <= 0 || numIndexes <= 0 ) {
+		return;
+	}
+	if ( numVertexes > SHADER_MAX_VERTEXES - 1 || numIndexes > SHADER_MAX_INDEXES - 1 ) {
+		ri.Printf( PRINT_WARNING, "WARNING: DrawTriangles2D: %d vertexes, %d indexes: too many\n", numVertexes, numIndexes );
+		return;
+	}
+
+	R_IssuePending2DCommands();
+
+	shader = R_GetShaderByHandle( hShader );
+	R_Begin2D( shader, R2D_STREAM, numVertexes, numIndexes );
+	firstVertex = tess.numVertexes;
+
+	for ( i = 0; i < numVertexes; i++ ) {
+		const vert2D_t *v = &vertexes[i];
+
+		tess.xyz[firstVertex + i][0] = v->xy[0];
+		tess.xyz[firstVertex + i][1] = v->xy[1];
+		tess.xyz[firstVertex + i][2] = 0;
+		tess.texCoords[firstVertex + i][0][0] = v->st[0];
+		tess.texCoords[firstVertex + i][0][1] = v->st[1];
+	}
+	if ( tr.identityLightByte == 255 ) {
+		for ( i = 0; i < numVertexes; i++ ) {
+			Com_Memcpy( tess.vertexColors[firstVertex + i], vertexes[i].rgba, 4 );
+		}
+	} else {
+		for ( i = 0; i < numVertexes; i++ ) {
+			const byte *c = vertexes[i].rgba;
+
+			tess.vertexColors[firstVertex + i][0] = c[0] * tr.identityLightByte / 255;
+			tess.vertexColors[firstVertex + i][1] = c[1] * tr.identityLightByte / 255;
+			tess.vertexColors[firstVertex + i][2] = c[2] * tr.identityLightByte / 255;
+			tess.vertexColors[firstVertex + i][3] = c[3];
+		}
+	}
+	tess.vertexColorValid = qtrue;
+
+	for ( i = 0; i < numIndexes; i++ ) {
+		int index = indexes[i];
+
+		if ( index >= numVertexes ) {
+			index = 0;	// a bad index draws nothing outside the call's vertexes
+		}
+		tess.indexes[tess.numIndexes + i] = firstVertex + index;
+	}
+	tess.numVertexes += numVertexes;
+	tess.numIndexes += numIndexes;
+
+	R_End2D();
+}
+
+/*
+================
 DrawLineLoop
 ================
 */
@@ -909,6 +976,31 @@ void DrawBoxes(const float (*boxes)[4], int count, const float *color) {
 	RB_DrawBoxes( boxes, count, color );
 }
 
+void DrawTriangles2D(qhandle_t hShader, const vert2D_t *vertexes, int numVertexes, const unsigned short *indexes, int numIndexes) {
+	if ( R_2DQueued() ) {
+		triangles2DCommand_t *cmd;
+		int vertexBytes;
+
+		if ( numVertexes <= 0 || numIndexes <= 0 || numVertexes > SHADER_MAX_VERTEXES - 1 || numIndexes > SHADER_MAX_INDEXES - 1 ) {
+			RB_DrawTriangles2D( hShader, vertexes, numVertexes, indexes, numIndexes );	// its warning, no draw
+			return;
+		}
+		vertexBytes = sizeof( vert2D_t ) * numVertexes;
+		cmd = R_GetCommandBuffer( sizeof( *cmd ) + PAD( vertexBytes + sizeof( unsigned short ) * numIndexes, sizeof( void * ) ) );
+		if ( !cmd ) {
+			return;
+		}
+		cmd->commandId = RC_2D_TRIANGLES;
+		cmd->hShader = hShader;
+		cmd->numVertexes = numVertexes;
+		cmd->numIndexes = numIndexes;
+		Com_Memcpy( cmd + 1, vertexes, vertexBytes );
+		Com_Memcpy( (byte *)( cmd + 1 ) + vertexBytes, indexes, sizeof( unsigned short ) * numIndexes );
+		return;
+	}
+	RB_DrawTriangles2D( hShader, vertexes, numVertexes, indexes, numIndexes );
+}
+
 void DrawLineLoop(const vec2_t* points, int count, int stipple_factor, int stipple_mask) {
 	if ( R_2DQueued() ) {
 		lineLoop2DCommand_t *cmd;
@@ -1024,6 +1116,12 @@ const void *RB_2DCommand( const void *data ) {
 		const boxes2DCommand_t *c = data;
 		RB_DrawBoxes( (const float (*)[4])( c + 1 ), c->count, c->color );
 		return R_2D_NEXT_VAR( boxes2DCommand_t, sizeof( float ) * 4 * c->count );
+	}
+	case RC_2D_TRIANGLES: {
+		const triangles2DCommand_t *c = data;
+		const vert2D_t *v = (const vert2D_t *)( c + 1 );
+		RB_DrawTriangles2D( c->hShader, v, c->numVertexes, (const unsigned short *)( v + c->numVertexes ), c->numIndexes );
+		return R_2D_NEXT_VAR( triangles2DCommand_t, sizeof( vert2D_t ) * c->numVertexes + sizeof( unsigned short ) * c->numIndexes );
 	}
 	case RC_2D_LINE_LOOP: {
 		const lineLoop2DCommand_t *c = data;

@@ -155,6 +155,10 @@ static VkFormat VK_TextureFormat( texFormat_t format, qboolean *rgb, qboolean *c
 	case TEXFMT_BC3:
 		*compressed = qtrue;
 		return VK_FORMAT_BC3_UNORM_BLOCK;
+	case TEXFMT_A8:
+		// without imageViewFormatSwizzle (portability subset) stored as RGBA
+		// (vk_upload_texture widens the texels)
+		return vk.viewSwizzle ? VK_FORMAT_R8_UNORM : VK_FORMAT_R8G8B8A8_UNORM;
 	case TEXFMT_RGBA8:
 	case TEXFMT_RGBA4:
 	default:
@@ -558,6 +562,7 @@ static vkTexture_t *VK_CreateTextureStorage( int width, int height, int mipLevel
 	}
 
 	texture->format = VK_TextureFormat( texFormat, &texture->rgb, &texture->compressed );
+	texture->alpha8 = texFormat == TEXFMT_A8;
 	texture->width = width;
 	texture->height = height;
 	texture->mipLevels = Com_Clamp( 1, maxLevels, mipLevels );
@@ -593,6 +598,13 @@ static vkTexture_t *VK_CreateTextureStorage( int width, int height, int mipLevel
 	// imageViewFormatSwizzle (portability subset) the fragment shader sets
 	// it (VK_PIPE_TEX*_RGB)
 	viewInfo.components.a = ( texture->rgb && vk.viewSwizzle ) ? VK_COMPONENT_SWIZZLE_ONE : VK_COMPONENT_SWIZZLE_IDENTITY;
+	if ( texture->format == VK_FORMAT_R8_UNORM ) {
+		// TEXFMT_A8: white with the texel's alpha
+		viewInfo.components.r = VK_COMPONENT_SWIZZLE_ONE;
+		viewInfo.components.g = VK_COMPONENT_SWIZZLE_ONE;
+		viewInfo.components.b = VK_COMPONENT_SWIZZLE_ONE;
+		viewInfo.components.a = VK_COMPONENT_SWIZZLE_R;
+	}
 	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	viewInfo.subresourceRange.levelCount = texture->mipLevels;
 	viewInfo.subresourceRange.layerCount = 1;
@@ -1050,7 +1062,7 @@ void vk_create_texture( image_t *image, int width, int height, int mipLevels, te
 		VK_DestroyTextureStorage( vk_slots[slot].texture );
 	}
 
-	if ( ( format >= TEXFMT_BC1_RGB ) && !vk.enabledFeatures.textureCompressionBC ) {
+	if ( format >= TEXFMT_BC1_RGB && format <= TEXFMT_BC3 && !vk.enabledFeatures.textureCompressionBC ) {
 		// the renderer only loads DDS files when compression is reported
 		ri.Printf( PRINT_ALL, S_COLOR_YELLOW "WARNING: vk_create_texture: %s is compressed but the device has no BC formats\n", image->imgName );
 		format = TEXFMT_RGBA8;
@@ -1094,9 +1106,28 @@ void vk_upload_texture( image_t *image, int mipLevel, int x, int y, int width, i
 		return;
 	}
 
-	size = (VkDeviceSize)width * height * 4;
-	data = VK_StagingAlloc( size, 16, &buffer, &offset );
-	Com_Memcpy( data, rgba, size );
+	if ( texture->alpha8 && texture->format == VK_FORMAT_R8_UNORM ) {
+		size = (VkDeviceSize)width * height;
+		data = VK_StagingAlloc( size, 16, &buffer, &offset );
+		Com_Memcpy( data, rgba, size );
+	} else if ( texture->alpha8 ) {
+		// stored as RGBA (no view swizzle): white with the texels' alpha
+		const byte	*in = rgba;
+		byte		*out;
+		int			i, n = width * height;
+
+		size = (VkDeviceSize)n * 4;
+		data = VK_StagingAlloc( size, 16, &buffer, &offset );
+		out = data;
+		for ( i = 0; i < n; i++, out += 4 ) {
+			out[0] = out[1] = out[2] = 255;
+			out[3] = in[i];
+		}
+	} else {
+		size = (VkDeviceSize)width * height * 4;
+		data = VK_StagingAlloc( size, 16, &buffer, &offset );
+		Com_Memcpy( data, rgba, size );
+	}
 
 	VK_RecordUpload( texture, mipLevel, x, y, width, height, buffer, offset );
 }

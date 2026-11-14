@@ -338,6 +338,12 @@ static void FL_AddBox( float x, float y, float w, float h ) {
 static void FL_DrawBoxes( const float (*boxes)[4], int count, const float *color ) {
 	FL_2D( fl.real.DrawBoxes( boxes, count, color ) )
 }
+static void FL_DrawTriangles2D( qhandle_t hShader, const vert2D_t *vertexes, int numVertexes, const unsigned short *indexes, int numIndexes ) {
+	FL_2D( fl.real.DrawTriangles2D( hShader, vertexes, numVertexes, indexes, numIndexes ) )
+}
+static void FL_UpdateImage2D( qhandle_t hShader, int x, int y, int width, int height, const byte *data ) {
+	FL_2D( fl.real.UpdateImage2D( hShader, x, y, width, height, data ) )
+}
 static void FL_Scissor( int x, int y, int width, int height ) {
 	FL_2D( fl.real.Scissor( x, y, width, height ) )
 }
@@ -707,6 +713,8 @@ refexport_t *VK_FrameLogExports( refexport_t *real ) {
 	e->DrawBox = FL_DrawBox;
 	e->AddBox = FL_AddBox;
 	e->DrawBoxes = FL_DrawBoxes;
+	e->DrawTriangles2D = FL_DrawTriangles2D;
+	e->UpdateImage2D = FL_UpdateImage2D;
 	e->Scissor = FL_Scissor;
 	e->DrawLineLoop = FL_DrawLineLoop;
 	e->DrawString = FL_DrawString;

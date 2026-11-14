@@ -244,6 +244,7 @@ typedef struct {
 	int				mipLevels;
 	qboolean		compressed;
 	qboolean		rgb;			// alpha samples as 1 (A = ONE swizzle)
+	qboolean		alpha8;			// TEXFMT_A8: uploads are a byte a texel, sampled as (1, 1, 1, a)
 	int				wrapX, wrapY;	// WRAP_REPEAT or WRAP_CLAMP
 
 	// layout tracking for uploads (see vk_image.c); between command buffers

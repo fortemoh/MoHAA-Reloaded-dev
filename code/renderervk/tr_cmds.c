@@ -85,6 +85,12 @@ void R_PerformanceCounters( void ) {
 		ri.Printf( PRINT_ALL, "flare adds:%i tests:%i renders:%i\n", 
 			backEnd.pc.c_flareAdds, backEnd.pc.c_flareTests, backEnd.pc.c_flareRenders );
 	}
+	else if (r_speeds->integer == 7 )
+	{
+		// the frame's draws, those of 2D (the HUD, the UI, the console) apart
+		ri.Printf( PRINT_ALL, "draws:%i 2d draws:%i 2d verts:%i\n",
+			backEnd.pc.c_draws, backEnd.pc.c_draws2D, backEnd.pc.c_vertexes2D );
+	}
 
 	Com_Memset( &tr.pc, 0, sizeof( tr.pc ) );
 	Com_Memset( &backEnd.pc, 0, sizeof( backEnd.pc ) );
