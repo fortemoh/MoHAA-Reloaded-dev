@@ -586,18 +586,45 @@ static struct {
     int         chargeStart;
     qboolean    chargeSecondary;
     int         silhouette[ARRAY_LEN(hud_weapons)];
+    signed char ammoKind[MAX_CONFIGSTRINGS]; // by the ammo name's configstring, 0 not read yet
 } wb;
+
+// the weapons by their names' hashes (lower case): a lookup a few times a frame
+#define HUD_WEAPON_TABLE 128
+static unsigned char hud_weaponTable[HUD_WEAPON_TABLE]; // index + 1, 0 none
+
+static unsigned int Hud_NameHash(const char *name)
+{
+    unsigned int h = 2166136261u;
+
+    for (; *name; name++) {
+        h = (h ^ (unsigned char)tolower((unsigned char)*name)) * 16777619u;
+    }
+    return h;
+}
 
 static const hudWeapon_t *Hud_Weapon(const char *name)
 {
-    size_t i;
+    unsigned int h;
 
     if (!name || !name[0]) {
         return NULL;
     }
-    for (i = 0; i < ARRAY_LEN(hud_weapons); i++) {
-        if (!Q_stricmp(name, hud_weapons[i].name)) {
-            return &hud_weapons[i];
+    static qboolean made;
+
+    if (!made) {
+        for (size_t i = 0; i < ARRAY_LEN(hud_weapons); i++) {
+            for (h = Hud_NameHash(hud_weapons[i].name) % HUD_WEAPON_TABLE; hud_weaponTable[h]; h = (h + 1) % HUD_WEAPON_TABLE) {
+            }
+            hud_weaponTable[h] = (unsigned char)(i + 1);
+        }
+        made = qtrue;
+    }
+    for (h = Hud_NameHash(name) % HUD_WEAPON_TABLE; hud_weaponTable[h]; h = (h + 1) % HUD_WEAPON_TABLE) {
+        const hudWeapon_t *w = &hud_weapons[hud_weaponTable[h] - 1];
+
+        if (!Q_stricmp(name, w->name)) {
+            return w;
         }
     }
     return NULL;
@@ -807,19 +834,23 @@ static void Hud_SyncWeapons(const char *weaponName, qboolean following, int clip
         int            frags = 0, smokes = 0;
 
         for (i = 0; i < MAX_AMMO; i++) {
-            const int   index = ps->ammo_name_index[i];
-            const char *name;
+            const int index = ps->ammo_name_index[i];
 
             if (index <= 0 || index >= MAX_CONFIGSTRINGS) {
                 continue;
             }
-            name = CG_ConfigString(index);
-            if (!name[0] || Q_stristr(name, "riflegrenade")) {
-                continue;
+            // what the ammo is, read from its name once (1 other, 2 frag, 3 smoke)
+            if (!wb.ammoKind[index]) {
+                const char *name = CG_ConfigString(index);
+
+                wb.ammoKind[index] = !name[0] || Q_stristr(name, "riflegrenade") ? 1
+                                   : Q_stristr(name, "smoke")                      ? 3
+                                   : Q_stristr(name, "grenade") || !Q_stricmp(name, "agrenade") ? 2
+                                                                                   : 1;
             }
-            if (Q_stristr(name, "smoke")) {
+            if (wb.ammoKind[index] == 3) {
                 smokes = Q_max(smokes, ps->ammo_amount[i]);
-            } else if (Q_stristr(name, "grenade") || !Q_stricmp(name, "agrenade")) {
+            } else if (wb.ammoKind[index] == 2) {
                 frags = Q_max(frags, ps->ammo_amount[i]);
             }
         }
@@ -1058,24 +1089,25 @@ static void Hud_ElemScore(void)
     unsigned int       leftColor = 0xFCFCFCFF, rightColor = 0xFCFCFCFF;
     hudKey             key;
 
-    hud_panelX = hud.w * 0.5f;
-    hud_panelW = 0.0f;
+    int                seconds = -1, score[2] = {-1, -1}, aliveCount[2] = {-1, -1};
+
     if (!fr.show || cgs.gametype == GT_SINGLE_PLAYER) {
+        hud_panelX = hud.w * 0.5f;
+        hud_panelW = 0.0f;
         Hud_Hide(E_SCORE);
         return;
     }
+    // the numbers first: the text and its widths only when one changed
     if (cg_hud_timer->integer && cg.matchStartTime != -1 && cgs.gametype != GT_LIBERATION && cgs.matchEndTime) {
-        const int seconds = (cgs.matchEndTime - cg.time) / 1000;
-
-        if (seconds >= 0) {
-            Com_sprintf(timer, sizeof(timer), "%d:%02d", seconds / 60, seconds % 60);
+        seconds = (cgs.matchEndTime - cg.time) / 1000;
+        if (seconds < 0) {
+            seconds = -1;
         }
     }
     if (cg_hud_score->integer) {
         if (cgs.gametype >= GT_TEAM) {
             const int own     = fr.ps->stats[STAT_KILLS];
             const int highest = fr.ps->stats[STAT_HIGHEST_SCORE];
-            int       score[2];
 
             score[0] = roster->teamScore[0];
             score[1] = roster->teamScore[1];
@@ -1089,22 +1121,33 @@ static void Hud_ElemScore(void)
                     score[!mine] = highest;
                 }
             }
-            if (score[0] >= 0) {
-                Com_sprintf(left, sizeof(left), "%d", score[0]);
-            }
-            if (score[1] >= 0) {
-                Com_sprintf(right, sizeof(right), "%d", score[1]);
-            }
             leftColor  = 0xCDEFFAFF;
             rightColor = 0xF5CFC8FF;
         } else {
-            Com_sprintf(left, sizeof(left), "%d", fr.ps->stats[STAT_KILLS]);
-            Com_sprintf(right, sizeof(right), "%d", fr.ps->stats[STAT_HIGHEST_SCORE]);
+            score[0] = fr.ps->stats[STAT_KILLS];
+            score[1] = fr.ps->stats[STAT_HIGHEST_SCORE];
         }
     }
     if (rounds && cg_hud_alive->integer) {
-        Com_sprintf(alive[0], sizeof(alive[0]), "%d", roster->alive[0]);
-        Com_sprintf(alive[1], sizeof(alive[1]), "%d", roster->alive[1]);
+        aliveCount[0] = roster->alive[0];
+        aliveCount[1] = roster->alive[1];
+    }
+    key.i(seconds).i(score[0]).i(score[1]).i(aliveCount[0]).i(aliveCount[1]).i(leftColor);
+    if (!Hud_Begin(E_SCORE, key)) {
+        return;
+    }
+    if (seconds >= 0) {
+        Com_sprintf(timer, sizeof(timer), "%d:%02d", seconds / 60, seconds % 60);
+    }
+    if (score[0] >= 0) {
+        Com_sprintf(left, sizeof(left), "%d", score[0]);
+    }
+    if (score[1] >= 0) {
+        Com_sprintf(right, sizeof(right), "%d", score[1]);
+    }
+    if (aliveCount[0] >= 0) {
+        Com_sprintf(alive[0], sizeof(alive[0]), "%d", aliveCount[0]);
+        Com_sprintf(alive[1], sizeof(alive[1]), "%d", aliveCount[1]);
     }
 
     {
@@ -1113,6 +1156,7 @@ static void Hud_ElemScore(void)
         const float timerW = timer[0] ? HudFont_Width(HUD_FACE_MEDIUM, S(22.0f), timer) + S(16.0f) : 0.0f;
         const float aliveH = alive[0][0] ? HudFont_LineHeight(HUD_FACE_MEDIUM, S(15.0f)) + S(10.0f) : 0.0f;
 
+        // (kept for the cards until the panel is made again)
         hud_panelW = (left[0] ? labelW : 0.0f) + timerW + (right[0] ? labelW : 0.0f);
         if (alive[0][0]) {
             const float gap = S(4.0f);
@@ -1123,10 +1167,6 @@ static void Hud_ElemScore(void)
         }
         hud_panelX = Px(hud.w * 0.5f - hud_panelW * 0.5f);
 
-        key.s(left).s(right).s(timer).s(alive[0]).s(alive[1]).i(leftColor);
-        if (!Hud_Begin(E_SCORE, key)) {
-            return;
-        }
         if (hud_panelW <= 0.0f) {
             return;
         }
@@ -1227,7 +1267,7 @@ static void Hud_ElemCards(void)
 
             if (dead) {
                 Hud_Rect(cx, 0.0f, card, card, Hud_Color(0x1C2024B3));
-                Hud_Frame(cx, 0.0f, card, card, edge, Hud_Color(0xFFFFFF33));
+                Hud_Sprite(HudAtlas_Shape(HUD_SHAPE_FRAME, (int)card, (int)card, edge), cx, 0.0f, Hud_Color(0xFFFFFF33));
                 if (size >= 16) {
                     const int pad = (int)S(6.0f);
 
@@ -1237,7 +1277,7 @@ static void Hud_ElemCards(void)
                 const qboolean me = client == cg.snap->ps.clientNum;
 
                 Hud_Rect(cx, 0.0f, card, card, Hud_Color(team == TEAM_ALLIES ? 0x4B6F8CD9 : 0x8C554BD9));
-                Hud_Frame(cx, 0.0f, card, card, me ? edge * 2.0f : edge, Hud_Color(me ? 0xCFDF7DFF : 0xFFFFFF33));
+                Hud_Sprite(HudAtlas_Shape(HUD_SHAPE_FRAME, (int)card, (int)card, me ? edge * 2.0f : edge), cx, 0.0f, Hud_Color(me ? 0xCFDF7DFF : 0xFFFFFF33));
                 if (size >= 16) {
                     const int pad = (int)S(5.0f);
 
