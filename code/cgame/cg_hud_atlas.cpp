@@ -718,6 +718,16 @@ const hudSprite_t *HudAtlas_Shape(hudShape_t shape, int w, int h, float p)
         HudPath_Circle(d * 0.5f, d * 0.5f, d * 0.5f, qfalse);
         HudPath_Circle(d * 0.5f, d * 0.5f, d * 0.5f - p, qtrue);
         break;
+    case HUD_SHAPE_FRAME:
+        {
+            // the outside clockwise, the inside the other way: a hole
+            const float outer[4][2] = {{0.0f, 0.0f}, {(float)w, 0.0f}, {(float)w, (float)h}, {0.0f, (float)h}};
+            const float inner[4][2] = {{p, p}, {p, h - p}, {w - p, h - p}, {w - p, p}};
+
+            HudPath_Polygon(outer, 4, 1.0f, 1.0f, 0.0f, 0.0f);
+            HudPath_Polygon(inner, 4, 1.0f, 1.0f, 0.0f, 0.0f);
+        }
+        break;
     // the teams' icons: fortemoh/moh-icons team/allies.svg and team/axis.svg
     // (viewBox 100 x 100), a layer a shape
     case HUD_SHAPE_ALLIES_0:

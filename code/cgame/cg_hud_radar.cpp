@@ -750,21 +750,31 @@ static void Radar_DrawMap(const radarPaint_t *p)
     radarPoint_t            a[N + 8], b[N + 8];
     int                     n = N, i;
 
+    static float            circle[N][2]; // the unit circle's points, made once
+    float                   toTexel, u0, v0;
+
     if (!radar.uploaded || radar.texUnits <= 0.0f) {
         return;
     }
+    if (!circle[0][0]) {
+        for (i = 0; i < N; i++) {
+            circle[i][0] = cosf((float)i / N * 2.0f * M_PI);
+            circle[i][1] = sinf((float)i / N * 2.0f * M_PI);
+        }
+    }
+    // screen offset to the picture's texels (Radar_Place turned back): world
+    // units a pixel over the units a texel
+    toTexel = 1.0f / (p->scale * radar.texUnits);
+    u0      = (radar.origin[0] - radar.texX0) / radar.texUnits;
+    v0      = (radar.origin[1] - radar.texY0) / radar.texUnits;
     for (i = 0; i < N; i++) {
-        const float ang = (float)i / N * 2.0f * M_PI;
-        const float ux = cosf(ang) * p->r, uy = sinf(ang) * p->r;
-        // screen offset to world (Radar_Place turned back)
+        const float ux = circle[i][0] * p->r, uy = circle[i][1] * p->r;
         const float u  = ux, v = -uy;
-        const float dx = (u * p->sinYaw + v * p->cosYaw) / p->scale;
-        const float dy = (-u * p->cosYaw + v * p->sinYaw) / p->scale;
 
         a[i].x = p->cx + ux;
         a[i].y = p->cy + uy;
-        a[i].u = (radar.origin[0] + dx - radar.texX0) / radar.texUnits;
-        a[i].v = (radar.origin[1] + dy - radar.texY0) / radar.texUnits;
+        a[i].u = u0 + (u * p->sinYaw + v * p->cosYaw) * toTexel;
+        a[i].v = v0 + (-u * p->cosYaw + v * p->sinYaw) * toTexel;
     }
     n = Radar_Clip(a, n, b, 0, 0.0f, 1.0f);
     n = Radar_Clip(b, n, a, 0, (float)radar.texW, -1.0f);
@@ -783,6 +793,35 @@ static void Radar_DrawMap(const radarPaint_t *p)
         }
         Hud_Vertexes(v);
     }
+}
+
+// the radar's shapes as the atlas has them, kept while the atlas is (a frame
+// asks for a dozen of a few sizes)
+static const hudSprite_t *Radar_Shape(hudShape_t shape, int w, float p)
+{
+    static struct {
+        int                generation;
+        hudShape_t         shape;
+        int                w;
+        float              p;
+        const hudSprite_t *sprite;
+    } cache[24];
+    static int next;
+    const int  generation = HudAtlas_Generation();
+    int        i;
+
+    for (i = 0; i < (int)ARRAY_LEN(cache); i++) {
+        if (cache[i].sprite && cache[i].generation == generation && cache[i].shape == shape && cache[i].w == w && cache[i].p == p) {
+            return cache[i].sprite;
+        }
+    }
+    i                   = next++ % (int)ARRAY_LEN(cache);
+    cache[i].generation = generation;
+    cache[i].shape      = shape;
+    cache[i].w          = w;
+    cache[i].p          = p;
+    cache[i].sprite     = HudAtlas_Shape(shape, w, 0, p);
+    return cache[i].sprite;
 }
 
 static hudColor_t Radar_TeamColor(int team)
@@ -804,16 +843,16 @@ static void Radar_DrawPlayer(const radarPaint_t *p, const radarBlip_t *b)
     if (b->hasYaw && !clamped) {
         // up on the radar is the view's yaw
         const hudSprite_t *pointer =
-            HudAtlas_Shape(HUD_SHAPE_POINTER, (int)(radius * 8.0f + 0.5f), 0, radius + 1.25f * p->k);
+            Radar_Shape(HUD_SHAPE_POINTER, (int)(radius * 8.0f + 0.5f), radius + 1.25f * p->k);
 
         Hud_SpriteTurned(pointer, x, y, 0.0f, 0.0f, radar.yaw - b->yaw, color);
     }
-    Hud_Sprite(HudAtlas_Shape(HUD_SHAPE_DISC, (int)((radius + 1.25f * p->k) * 2.0f + 0.5f), 0, 0.0f), x - radius - 1.25f * p->k, y - radius - 1.25f * p->k, edge);
-    Hud_Sprite(HudAtlas_Shape(HUD_SHAPE_DISC, (int)(radius * 2.0f + 0.5f), 0, 0.0f), x - radius, y - radius, color);
+    Hud_Sprite(Radar_Shape(HUD_SHAPE_DISC, (int)((radius + 1.25f * p->k) * 2.0f + 0.5f), 0.0f), x - radius - 1.25f * p->k, y - radius - 1.25f * p->k, edge);
+    Hud_Sprite(Radar_Shape(HUD_SHAPE_DISC, (int)(radius * 2.0f + 0.5f), 0.0f), x - radius, y - radius, color);
 
     // a storey above or below: a dark ^ or v in the dot
     if (b->hasZ && fabsf(b->origin[2] - radar.origin[2]) > RADAR_LEVEL_DZ) {
-        const hudSprite_t *chevron = HudAtlas_Shape(HUD_SHAPE_CHEVRON, (int)(radius * 2.0f + 0.5f), 0, 0.0f);
+        const hudSprite_t *chevron = Radar_Shape(HUD_SHAPE_CHEVRON, (int)(radius * 2.0f + 0.5f), 0.0f);
 
         Hud_SpriteTurned(chevron, x, y, 0.0f, 0.0f, b->origin[2] > radar.origin[2] ? 0.0f : 180.0f, edge);
     }
@@ -829,8 +868,8 @@ static void Radar_DrawObjective(const radarPaint_t *p, const radarBlip_t *b)
     float            x, y;
 
     Radar_Place(p, b->origin, p->r - 7.0f * p->k, &x, &y);
-    Hud_SpriteTurned(HudAtlas_Shape(HUD_SHAPE_DIAMOND, (int)((half + 1.75f * p->k) * 2.0f + 0.5f), 0, 0.0f), x, y, 0.0f, 0.0f, 0.0f, edge);
-    Hud_SpriteTurned(HudAtlas_Shape(HUD_SHAPE_DIAMOND, (int)(half * 2.0f + 0.5f), 0, 0.0f), x, y, 0.0f, 0.0f, 0.0f, color);
+    Hud_SpriteTurned(Radar_Shape(HUD_SHAPE_DIAMOND, (int)((half + 1.75f * p->k) * 2.0f + 0.5f), 0.0f), x, y, 0.0f, 0.0f, 0.0f, edge);
+    Hud_SpriteTurned(Radar_Shape(HUD_SHAPE_DIAMOND, (int)(half * 2.0f + 0.5f), 0.0f), x, y, 0.0f, 0.0f, 0.0f, color);
 }
 
 /*
@@ -886,8 +925,8 @@ void HudRadar_Draw(float x, float y, float size, float damageAngle, float damage
         }
     }
 
-    Hud_Sprite(HudAtlas_Shape(HUD_SHAPE_DISC, (int)(size + 0.5f), 0, 0.0f), x, y, Hud_Color(0x0C0E12C7));
-    Hud_Sprite(HudAtlas_Shape(HUD_SHAPE_RING, (int)(size + 0.5f), 0, p.k), x, y, Hud_Color(0xFFFFFF1A));
+    Hud_Sprite(Radar_Shape(HUD_SHAPE_DISC, (int)(size + 0.5f), 0.0f), x, y, Hud_Color(0x0C0E12C7));
+    Hud_Sprite(Radar_Shape(HUD_SHAPE_RING, (int)(size + 0.5f), p.k), x, y, Hud_Color(0xFFFFFF1A));
 
     if (radar.loaded) {
         Radar_DrawMap(&p);
@@ -906,8 +945,8 @@ void HudRadar_Draw(float x, float y, float size, float damageAngle, float damage
             }
         }
         // the player: an arrow at the center, up
-        Hud_SpriteTurned(HudAtlas_Shape(HUD_SHAPE_ARROW, (int)(16.0f * 1.4f * p.k + 0.5f), 0, 0.0f), p.cx, p.cy, 0.0f, 0.0f, 0.0f, Hud_Color(0x0C0E12E6));
-        Hud_SpriteTurned(HudAtlas_Shape(HUD_SHAPE_ARROW, (int)(16.0f * p.k + 0.5f), 0, 0.0f), p.cx, p.cy, 0.0f, 0.0f, 0.0f, Hud_Color(0xFFFFFFFF));
+        Hud_SpriteTurned(Radar_Shape(HUD_SHAPE_ARROW, (int)(16.0f * 1.4f * p.k + 0.5f), 0.0f), p.cx, p.cy, 0.0f, 0.0f, 0.0f, Hud_Color(0x0C0E12E6));
+        Hud_SpriteTurned(Radar_Shape(HUD_SHAPE_ARROW, (int)(16.0f * p.k + 0.5f), 0.0f), p.cx, p.cy, 0.0f, 0.0f, 0.0f, Hud_Color(0xFFFFFFFF));
     }
 
     // N, E, S and W inside the edge, turning with the view: the capitals'
@@ -927,7 +966,7 @@ void HudRadar_Draw(float x, float y, float size, float damageAngle, float damage
 
     // the damage's direction (the compass's wedge), and the ring
     if (damageAlpha > 0.0f) {
-        Hud_SpriteTurned(HudAtlas_Shape(HUD_SHAPE_WEDGE, (int)(size + 0.5f), 0, 0.0f), p.cx, p.cy, 0.0f, 0.0f, damageAngle, Hud_Fade(Hud_Color(0xC03021FF), damageAlpha));
+        Hud_SpriteTurned(Radar_Shape(HUD_SHAPE_WEDGE, (int)(size + 0.5f), 0.0f), p.cx, p.cy, 0.0f, 0.0f, damageAngle, Hud_Fade(Hud_Color(0xC03021FF), damageAlpha));
     }
-    Hud_Sprite(HudAtlas_Shape(HUD_SHAPE_RING, (int)(size + 0.5f), 0, 2.0f * Hud_Scale()), x, y, Hud_Color(0xDCE4A4E6));
+    Hud_Sprite(Radar_Shape(HUD_SHAPE_RING, (int)(size + 0.5f), 2.0f * Hud_Scale()), x, y, Hud_Color(0xDCE4A4E6));
 }
