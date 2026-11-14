@@ -1385,6 +1385,27 @@ void CG_DrawCrosshair()
     cgi.R_DrawBoxes(crosshairLayout.arms, 4, crosshairLayout.color);
 }
 
+/*
+====================
+CG_CrosshairBoxes
+
+Added: the crosshair's boxes and color when it shows (the Competitive HUD
+draws it in its own draw)
+====================
+*/
+qboolean CG_CrosshairBoxes(const float (**arms)[4], const float **color)
+{
+    if (!cg_hud->integer || !ui_crosshair->integer || !cg.snap) {
+        return qfalse;
+    }
+    if ((cg.snap->ps.pm_flags & (PMF_NO_HUD | PMF_INTERMISSION)) || !cg.snap->ps.stats[STAT_CROSSHAIR]) {
+        return qfalse;
+    }
+    *arms  = crosshairLayout.arms;
+    *color = crosshairLayout.color;
+    return qtrue;
+}
+
 void CG_DrawVote()
 {
     const char *text;
@@ -1475,6 +1496,14 @@ void CG_Draw2D(void)
     CG_HudDrawElements();
     CG_DrawObjectives();
     CG_DrawIcons();
+    if (CG_HudCompetitive_Active()) {
+        // Added: the Competitive HUD draws the stopwatch, the spectator's keys,
+        // the team, the player aimed at, the attacker, the vote and the
+        // crosshair its own way, all in one draw over the rest
+        CG_DrawInstantMessageMenu();
+        CG_HudCompetitive_Draw();
+        return;
+    }
     CG_DrawStopwatch();
     CG_DrawSpectatorView();
     CG_DrawPlayerEntInfo();

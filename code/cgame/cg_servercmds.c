@@ -327,6 +327,8 @@ static void CG_ServerCommand(qboolean modelOnly)
 
     if (!strcmp(cmd, "print") || !strcmp(cmd, "hudprint")) {
         cgi.Printf("%s", cgi.Argv(1));
+        // Added: the Competitive HUD's chat, game messages and kills (an Allied Assault server's)
+        CG_HudFeed_Print(cgi.Argv(1));
         if (!strcmp(cmd, "hudprint")) {
             CG_HudPrint_f();
         }
@@ -343,6 +345,9 @@ static void CG_ServerCommand(qboolean modelOnly)
         attackerName = cgi.Argv(3);
         victimName   = cgi.Argv(4);
         type         = cgi.Argv(5);
+
+        // Added: the Competitive HUD's kill feed
+        CG_HudFeed_DeathMessage(s1, s2, attackerName, victimName, *type);
 
         if (*type == tolower(*type)) {
             hudColor = 4;
