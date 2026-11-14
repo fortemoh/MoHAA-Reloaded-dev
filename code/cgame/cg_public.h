@@ -456,6 +456,10 @@ functions exported to the main executable
         // R_DrawBox for count boxes (x, y, width, height) in one draw (Metal port)
         void (*R_DrawBoxes)(const float (*boxes)[4], int count, const float *color);
 
+        // the entity lump of the map CM_LoadMap loaded (as on vulkan; the Competitive HUD's radar starts its
+        // walk at the spawn points and the ladders)
+        char *(*CM_EntityString)(void);
+
         // the renderer's CreateImage2D, UpdateImage2D and DrawTriangles2D (refexport_t): a texture from memory
         // and its shader, its texels replaced, triangles of it in their own colors in one draw (the
         // Competitive HUD, cg_hud_competitive.cpp)
