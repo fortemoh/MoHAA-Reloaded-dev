@@ -3753,7 +3753,9 @@ void Weapon::FallingAngleAdjust(Event *ev)
             setAngles(vAng);
         }
 
-        if (weapon_class >= 0) {
+        // as stock 1.11 (Linux fgamededmohaa.so 0x2e09af-0x2e09b7, test al,al;
+        // js): no drop sound for an item
+        if (!(weapon_class & WEAPON_CLASS_ITEM)) {
             Sound(G_WeaponClassNumToName(weapon_class) + "_drop");
         }
 
