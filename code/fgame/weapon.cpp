@@ -704,8 +704,9 @@ Weapon::Weapon()
     m_bCanPartialReload = qtrue;
     m_bShareClip        = qfalse;
 
-    // do better lighting on all weapons
-    edict->s.renderfx |= RF_EXTRALIGHT;
+    // Changed in OPM
+    //  No RF_EXTRALIGHT ("do better lighting on all weapons", from FAKK2):
+    //  stock's Weapon() leaves renderfx alone (SD-091).
 
     // Weapons do not auto aim automatically
     autoaim = false;
