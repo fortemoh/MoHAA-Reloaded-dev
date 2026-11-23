@@ -1592,7 +1592,10 @@ qboolean Player::CondSolidForward(Conditional& condition)
     Vector vMins(mins.x, mins.y, -8);
     Vector vMaxs(maxs.x, maxs.y, 8);
 
-    trace_t trace = G_Trace(centroid, vMins, vMaxs, end, this, MASK_SOLID, true, "Player::CondSolidforward");
+    // AA 1.11 traces with MASK_PLAYERSOLID here (0x42012b01, Linux 0x29d0dd)
+    const int mask = g_protocol >= PROTOCOL_MOHTA_MIN ? MASK_SOLID : MASK_PLAYERSOLID;
+
+    trace_t trace = G_Trace(centroid, vMins, vMaxs, end, this, mask, true, "Player::CondSolidforward");
 
     return (trace.fraction < 0.7f);
 }
