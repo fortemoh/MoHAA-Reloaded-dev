@@ -2336,6 +2336,12 @@ float BulletAttack(
                 }
 
                 if (ent && ent != world && ent != owner) {
+                    // The impact goes by how solid the target was when the
+                    // bullet reached it. A fatal hit makes a player SOLID_NOT
+                    // inside Damage(), and AA 1.11 still sends that hit's
+                    // flesh impact (snd_bh_flesh and the hit puff).
+                    const solid_t solidAtHit = ent->edict->solid;
+
                     if (ent->takedamage) {
                         if (g_gametype->integer == GT_SINGLE_PLAYER && !iNumHit) {
                             BulletAttack_Stat(owner, ent, &trace, weap);
@@ -2365,7 +2371,7 @@ float BulletAttack(
                         damage_total += original_value - ent->health;
                     }
 
-                    if (ent->edict->solid == SOLID_BBOX && !(trace.contents & CONTENTS_CLAYPIDGEON)) {
+                    if (solidAtHit == SOLID_BBOX && !(trace.contents & CONTENTS_CLAYPIDGEON)) {
                         if (trace.surfaceFlags & MASK_SURF_TYPE) {
                             gi.SetBroadcastVisible(vTmpEnd, NULL);
                             gi.MSG_StartCGM(BG_MapCGMToProtocol(g_protocol, CGM_BULLET_6));
@@ -2394,7 +2400,7 @@ float BulletAttack(
                             gi.MSG_WriteBits(bulletlarge, bulletbits);
                             gi.MSG_EndCGM();
                         }
-                    } else if (ent->edict->solid == SOLID_BSP && !(trace.contents & CONTENTS_CLAYPIDGEON)) {
+                    } else if (solidAtHit == SOLID_BSP && !(trace.contents & CONTENTS_CLAYPIDGEON)) {
                         gi.SetBroadcastVisible(vTmpEnd, NULL);
                         gi.MSG_StartCGM(BG_MapCGMToProtocol(g_protocol, CGM_BULLET_6));
                         gi.MSG_WriteCoord(vTmpEnd[0]);
