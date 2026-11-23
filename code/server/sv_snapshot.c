@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "server.h"
 #include "../qcommon/bg_compat.h"
+#include "sv_farplane.h"
 
 #define	CULL_IN		0		// completely unclipped
 #define	CULL_CLIP	1		// clipped by one or more planes
@@ -749,7 +750,26 @@ static void SV_AddEntitiesVisibleFromPoint(const vec3_t origin, clientSnapshot_t
 			}
 		}
 
-		if (g_gametype->integer != GT_SINGLE_PLAYER && !(ent->r.svFlags & SVF_NOFARPLANE)) {
+		if (com_protocol->integer < PROTOCOL_MOHTA_MIN) {
+			//
+			// Changed in OPM
+			//  AA 1.11's own cull, read in all three stock engines (see
+			//  sv_farplane.h): with a farplane set, drop the entity, or its
+			//  parent, when its distance squared less its radius squared passes
+			//  sv.farplane, (farplane + 32) squared. No facing, FOV or 12000
+			//  clamp, no SVF_NOFARPLANE exception, in every game type, and in
+			//  the same place in the loop, after the area check. The
+			//  Spearhead/Breakthrough cull below read the squared farplane as a
+			//  distance, so on AA it was 12000 on every map and dropped players
+			//  about 3030 units behind you even on maps without fog
+			//  (openmohaa-server's docs/stock-differences.md, SD-056).
+			//
+			const gentity_t *distEnt = parentEnt ? parentEnt : ent;
+
+			if (SV_StockFarplaneCulls(distEnt->r.centroid, distEnt->r.radius, origin, sv.farplane)) {
+				continue;
+			}
+		} else if (g_gametype->integer != GT_SINGLE_PLAYER && !(ent->r.svFlags & SVF_NOFARPLANE)) {
 			float farplane = sv.farplane;
 
 			if (farplane < 1) farplane = 12000;
