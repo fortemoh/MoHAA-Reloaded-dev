@@ -3662,10 +3662,15 @@ void Player::GetMoveInfo(pmove_t *pm)
             && groundentity->entity->velocity[2] != 0) {
             pm->ps->pm_flags |= PMF_NO_PREDICTION;
         }
-    } else if (m_pGlueMaster) {
-        // Added in OPM
-        //  Use the glue master for the ground entity to make the viewmodel will stay still
-        pm->ps->groundEntityNum = m_pGlueMaster->entnum;
+    } else {
+        // stock 1.11 drops the push in the air too (0x28716c-0x2871b1)
+        m_vPushVelocity = vec_zero;
+
+        if (m_pGlueMaster) {
+            // Added in OPM
+            //  Use the glue master for the ground entity to make the viewmodel will stay still
+            pm->ps->groundEntityNum = m_pGlueMaster->entnum;
+        }
     }
 
     velocity = Vector(pm->ps->velocity[0], pm->ps->velocity[1], pm->ps->velocity[2]);
@@ -4144,7 +4149,10 @@ void Player::ClientMove(usercmd_t *ucmd)
         Pmove(&pm);
         GetMoveInfo(&pm);
 
-        if (!g_playerStacking->integer // Changed in OPM: determine if standing on another player's head is allowed
+        // AA 1.11 goes straight from GetMoveInfo to ProcessPmoveEvents
+        // (Linux fgamededmohaa.so 0x2884a9-0x2884b8)
+        if (g_protocol >= protocol_e::PROTOCOL_MOHTA_MIN
+            && !g_playerStacking->integer // Changed in OPM: determine if standing on another player's head is allowed
             && g_gametype->integer != GT_SINGLE_PLAYER && groundentity && groundentity->entity
             && groundentity->entity->IsSubclassOfSentient()) {
             //
@@ -7945,9 +7953,9 @@ void Player::addOrigin(Vector org)
 {
     setLocalOrigin(localorigin + org);
 
-    animspeed         = org.x * (1.f / level.frametime);
-    airspeed          = org.y * (1.f / level.frametime);
-    m_vPushVelocity.x = org.z * (1.f / level.frametime);
+    // the whole push, as stock 1.11 (Linux fgamededmohaa.so 0x2904d5-0x290515);
+    // the decompile had it in animspeed, airspeed and m_vPushVelocity.x
+    m_vPushVelocity = org * (1.f / level.frametime);
 }
 
 void Player::Jump(Event *ev)
@@ -7959,9 +7967,10 @@ void Player::Jump(Event *ev)
         return;
     }
 
-    if (g_gametype->integer != GT_SINGLE_PLAYER) {
+    if (g_protocol >= protocol_e::PROTOCOL_MOHTA_MIN && g_gametype->integer != GT_SINGLE_PLAYER) {
         // Added in 2.0
         //  Don't jump when on top of another sentient
+        //  (AA 1.11 has no such check: Linux fgamededmohaa.so 0x278480)
         if (groundentity && groundentity->entity && groundentity->entity->IsSubclassOfSentient()) {
             return;
         }
@@ -7970,11 +7979,17 @@ void Player::Jump(Event *ev)
     maxheight = ev->GetFloat(1);
 
     if (maxheight > 16) {
+        if (sv_gravity->integer <= 0) {
+            // as stock 1.11 (0x278544)
+            return;
+        }
+
         // v^2 = 2ad
         velocity[2] += sqrt(2 * sv_gravity->integer * maxheight);
 
         if (client->ps.groundEntityNum != ENTITYNUM_NONE) {
-            velocity += m_vPushVelocity;
+            // AA 1.11 carries 0.9 of the push (0.9f at 0x3061b8, 0x27857e)
+            velocity += m_vPushVelocity * (g_protocol < protocol_e::PROTOCOL_MOHTA_MIN ? 0.9f : 1.0f);
         }
 
         // make sure the player leaves the ground
