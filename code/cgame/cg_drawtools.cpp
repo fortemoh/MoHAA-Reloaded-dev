@@ -546,6 +546,10 @@ void CG_DrawZoomOverlay()
     case 1:
         CG_DrawOverlayTopBottom(cgs.media.kar98TopOverlayShader, cgs.media.kar98BottomOverlayShader, fAlpha);
         break;
+    case 2:
+        // stock 1.11 draws nothing for the spy camera (cgamex86.dll
+        // 0x3001f2c4: no case for it)
+        break;
     case 3:
         CG_DrawOverlayFullScreen(cgs.media.binocularsOverlayShader, fAlpha);
         break;
