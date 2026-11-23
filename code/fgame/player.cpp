@@ -7169,7 +7169,7 @@ void Player::PlayerAngles(void)
         angles[1]                      = portableTurret->GetStartYaw();
     }
 
-    PmoveAdjustAngleSettings(v_angle, angles, &client->ps, &edict->s);
+    PmoveAdjustAngleSettings(v_angle, angles, &client->ps, &edict->s, g_protocol);
 
     SetViewAngles(v_angle);
     setAngles(angles);

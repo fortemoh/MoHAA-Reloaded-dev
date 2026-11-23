@@ -1583,7 +1583,9 @@ static void PmoveAdjustViewAngleSettings_OnLadder(
     }
 }
 
-void PmoveAdjustAngleSettings(vec_t *vViewAngles, vec_t *vAngles, playerState_t *pPlayerState, entityState_t *pEntState)
+void PmoveAdjustAngleSettings(
+    vec_t *vViewAngles, vec_t *vAngles, playerState_t *pPlayerState, entityState_t *pEntState, int protocol
+)
 {
     vec3_t temp, temp2;
     vec3_t armsAngles, torsoAngles, headAngles;
@@ -1613,7 +1615,14 @@ void PmoveAdjustAngleSettings(vec_t *vViewAngles, vec_t *vAngles, playerState_t 
 
         EulerToQuat(headAngles, pEntState->bone_quat[HEAD_TAG]);
     } else {
-        if (pPlayerState->pm_flags & PMF_TURRET) {
+        //
+        // AA 1.11 (Linux fgamededmohaa.so 0x1e47b5-0x1e47d4) always faces the
+        // body along the view's yaw, on a turret too, and never touches
+        // eFlags; on a turret the head gets the whole difference (below)
+        //
+        const bool bStockAA = protocol < protocol_e::PROTOCOL_MOHTA_MIN;
+
+        if ((pPlayerState->pm_flags & PMF_TURRET) && !bStockAA) {
             vAngles[2] = 0;
             // Added in 2.0
             //  Clients checking this flag will draw an icon
@@ -1622,7 +1631,9 @@ void PmoveAdjustAngleSettings(vec_t *vViewAngles, vec_t *vAngles, playerState_t 
         } else {
             fTmp = AngleMod(vViewAngles[1]);
             VectorSet(vAngles, 0, fTmp, 0);
-            pEntState->eFlags &= ~EF_PLAYER_ARTILLERY;
+            if (!bStockAA) {
+                pEntState->eFlags &= ~EF_PLAYER_ARTILLERY;
+            }
         }
 
         if (pPlayerState->pm_flags & PMF_TURRET) {
@@ -1637,10 +1648,11 @@ void PmoveAdjustAngleSettings(vec_t *vViewAngles, vec_t *vAngles, playerState_t 
             AnglesSubtract(vViewAngles, vAngles, headAngles);
             // Added in 2.0
             //  Prevent rotating the player head like a monster
-            if (headAngles[1] > 90) {
+            //  (AA 1.11 doesn't clamp, 0x1e487d)
+            if (!bStockAA && headAngles[1] > 90) {
                 headAngles[1] = 90;
             }
-            if (headAngles[1] < -90) {
+            if (!bStockAA && headAngles[1] < -90) {
                 headAngles[1] = -90;
             }
 
