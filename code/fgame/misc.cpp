@@ -38,6 +38,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "weaputils.h"
 #include "g_spawn.h"
 #include "g_phys.h"
+#include "g_ladder.h"
 #include "../script/scriptexception.h"
 
 /*****************************************************************************/
@@ -2947,37 +2948,40 @@ qboolean FuncLadder::CanUseLadder(Entity *pUser)
 
 void FuncLadder::PositionOnLadder(Entity *pUser)
 {
-    Vector  vPos;
     Vector  vStart;
     Vector  vEnd;
     trace_t trace;
 
-    if (pUser->origin[2] + pUser->maxs[2] > absmax[2]) {
+    // As stock 1.11 (Linux fgamededmohaa.so 0x26b410, g_ladder.h): the spot
+    // at the top, the bottom or on a rung, which the user drops onto from
+    // 16 units above. Users without a client trace as monsters.
+    const int mask = pUser->client ? MASK_PLAYERSOLID : MASK_MONSTERSOLID;
+
+    switch (G_LadderMount(pUser->origin[2], pUser->maxs[2], absmin[2], absmax[2])) {
+    case LADDER_MOUNT_TOP:
         vEnd    = origin + m_vFacingDir * 26.0f;
         vEnd[2] = absmax[2] + 2.0f;
-    } else if (absmin[2] + 32.0f > pUser->origin[2]) {
+        break;
+    case LADDER_MOUNT_BOTTOM:
         vEnd    = origin - m_vFacingDir * 29.0f;
         vEnd[2] = absmin[2] + 2.0f;
-    } else {
+        break;
+    default:
         vEnd    = origin - m_vFacingDir * 16.0f;
-        vEnd[2] = pUser->origin[2] + 8.0f;
+        vEnd[2] = G_LadderRungHeight(pUser->origin[2]);
+        break;
     }
 
-    vStart = vEnd;
+    vStart = vEnd + Vector(0, 0, 16);
 
-    trace =
-        G_Trace(vStart, pUser->mins, pUser->maxs, vEnd, pUser, MASK_PLAYERSOLID, qtrue, "FuncLadder::PositionOnLadder");
+    trace = G_Trace(vStart, pUser->mins, pUser->maxs, vEnd, pUser, mask, qtrue, "FuncLadder::PositionOnLadder");
 
     if (trace.allsolid) {
-        vStart    = pUser->origin;
-        vStart[2] = pUser->origin[2] + 4.0f;
+        // from where the user is to the spot, both 4 units up
+        vStart = pUser->origin + Vector(0, 0, 4);
+        vEnd   = vEnd + Vector(0, 0, 4);
 
-        vEnd    = origin - m_vFacingDir * 16.0f;
-        vEnd[2] = pUser->origin[2] + 4.0f;
-
-        trace = G_Trace(
-            vStart, pUser->mins, pUser->maxs, vEnd, pUser, MASK_PLAYERSOLID, qtrue, "FuncLadder::PositionOnLadder2"
-        );
+        trace = G_Trace(vStart, pUser->mins, pUser->maxs, vEnd, pUser, mask, qtrue, "FuncLadder::PositionOnLadder2");
     }
 
     pUser->setOrigin(trace.endpos);
