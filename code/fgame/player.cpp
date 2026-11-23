@@ -8845,12 +8845,18 @@ void Player::InitDeathmatch(void)
         }
     }
 
-    edict->s.eFlags &= ~(TEAM_ALLIES | TEAM_AXIS);
+    //
+    // Fixed in OPM
+    //  This used the team numbers (3 and 4) as flags, putting bits 0-2 in
+    //  eFlags, 2 being EF_TELEPORT_BIT. Stock sets the team flags here
+    //  (Linux 0x2915f3, 0x292903, 0x292913; SD-090).
+    //
+    edict->s.eFlags &= ~EF_ANY_TEAM;
 
     if (GetTeam() == TEAM_ALLIES) {
-        edict->s.eFlags |= TEAM_ALLIES;
+        edict->s.eFlags |= EF_ALLIES;
     } else if (GetTeam() == TEAM_AXIS) {
-        edict->s.eFlags |= TEAM_AXIS;
+        edict->s.eFlags |= EF_AXIS;
     }
 
     G_SetClientConfigString(edict);
