@@ -1419,7 +1419,11 @@ void PmoveSingle(pmove_t *pmove)
     }
 
     if ((pm->ps->pm_flags & PMF_NO_MOVE) || (pm->ps->pm_flags & PMF_FROZEN)) {
-        PM_CheckDuck();
+        if (pm->protocol >= protocol_e::PROTOCOL_MOHTA_MIN) {
+            // AA 1.11 returns at once (Linux fgamededmohaa.so 0x1e40b1,
+            // cgamex86.dll 0x3000449f-0x300044bd)
+            PM_CheckDuck();
+        }
         return;
     }
 
