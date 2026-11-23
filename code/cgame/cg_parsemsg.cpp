@@ -378,7 +378,15 @@ static void CG_MakeBulletHole(
         );
     }
 
-    CG_MakeBulletHoleType(vFrom, i_vNorm, iLarge, iEffect, fRadius, bMakeSound);
+    if (cg_protocol < protocol_e::PROTOCOL_MOHTA_MIN) {
+        // AA 1.11 aims the hit effect along the surface the trace found
+        // (cgamex86.dll 0x3002e1bf), not the normal passed in, which for a
+        // server's wall impact is rounded to one of 162 directions;
+        // Spearhead and Breakthrough use the one passed in
+        CG_MakeBulletHoleType(vFrom, trace.plane.normal, iLarge, iEffect, fRadius, bMakeSound);
+    } else {
+        CG_MakeBulletHoleType(vFrom, i_vNorm, iLarge, iEffect, fRadius, bMakeSound);
+    }
 }
 
 static void CG_MakeBubbleTrail(const vec3_t i_vStart, const vec3_t i_vEnd, int iLarge, float alpha = 1.0f)
