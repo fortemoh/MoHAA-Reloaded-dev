@@ -1422,7 +1422,8 @@ void UI_CompHud_Frame(void)
     // over their head, UI_DrawTeamTag; who killed you: the kill feed)
     if (full) {
         const int info  = ps->stats[STAT_INFOCLIENT];
-        const int fteam = following ? Comp_Team(info) : 0;
+        // (the plate's icon their side, as the CS2 strip's badge: Comp_Side)
+        const int fteam = following ? Comp_Side(info) : 0;
 
         Comp_Set("ui_hud_follow", following ? Comp_Name(info) : "");
         Comp_Set("ui_hud_follow_col", following ? Comp_TeamColor(Comp_Team(info)) : "1 1 1 1");
