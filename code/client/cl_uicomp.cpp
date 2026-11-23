@@ -398,8 +398,13 @@ static void Comp_ConfigStrings(void)
     Q_strncpyz(cs.map, Info_ValueForKey(info, "mapname"), sizeof(cs.map));
     for (int i = 0; i < MAX_CLIENTS; i++) {
         const char *team = Info_ValueForKey(CL_ConfigString(CS_PLAYERS + i), "team");
+        const char *name = Info_ValueForKey(CL_ConfigString(CS_PLAYERS + i), "name");
 
-        Q_strncpyz(cs.name[i], Info_ValueForKey(CL_ConfigString(CS_PLAYERS + i), "name"), sizeof(cs.name[i]));
+        // (another player in the slot, or none: the uniform seen there forgotten)
+        if (strcmp(cs.name[i], name)) {
+            comp.side[i] = 0;
+        }
+        Q_strncpyz(cs.name[i], name, sizeof(cs.name[i]));
         cs.team[i] = team[0] ? atoi(team) : -1;
     }
     for (int i = 0; i < MAX_OBJECTIVES; i++) {
@@ -508,7 +513,7 @@ static qboolean Comp_AddKill(const char *text, qboolean ourVictim)
     const compKillPic_t *pic = &comp_killPics[0];
     compKill_t          *k;
     const char          *hit = NULL, *after, *end = NULL;
-    int                  client;
+    int                  client, killer, side;
     qboolean             axis;
 
     for (size_t i = 0; i < ARRAY_LEN(comp_phrases) && !ph; i++) {
@@ -557,9 +562,16 @@ static qboolean Comp_AddKill(const char *text, qboolean ourVictim)
 
         k->victimTeam = ourVictim == (mine != TEAM_AXIS) ? TEAM_ALLIES : TEAM_AXIS;
     }
-    k->killerTeam = Comp_Team(Comp_FindName(k->killer));
-    // the killer's weapon: of the victim's side without one
-    axis    = (k->killer[0] ? k->killerTeam : k->victimTeam) == TEAM_AXIS;
+    killer        = Comp_FindName(k->killer);
+    k->killerTeam = Comp_Team(killer);
+    // the weapon's picture of the killer's side, the victim's without a killer (Comp_Side: their team, else the
+    // uniform last seen on them, all an AA server's free-for-all tells; a round mode's victim of no known team:
+    // the side guessed above)
+    side = Comp_Side(k->killer[0] ? killer : client);
+    if (!side && !k->killer[0]) {
+        side = k->victimTeam;
+    }
+    axis    = side == TEAM_AXIS;
     k->pic  = axis ? pic->axis : pic->allies;
     Comp_KillIconSize(pic, axis, &k->picW, &k->picH);
     // (a suicide is the player's death)
@@ -850,6 +862,10 @@ static void Comp_Roster(int gametype)
     }
     if (!(ps->pm_flags & PMF_SPECTATING)) {
         comp.dead[ps->clientNum] = ps->stats[STAT_HEALTH] <= 0;
+    }
+    // (the snapshot's own player's uniform: ours, or the followed player's through their eyes)
+    if (ps->stats[STAT_TEAM] == TEAM_ALLIES || ps->stats[STAT_TEAM] == TEAM_AXIS) {
+        comp.side[ps->clientNum] = ps->stats[STAT_TEAM];
     }
     if (comp.wasPlaying && !playing) {
         comp.wantScores = qtrue;
