@@ -148,6 +148,9 @@ struct rlInfo_t {
     int                     dmflags, fraglimit, maxClients;
     char                    map[MAX_QPATH];
     std::vector<rlPlayer_t> allies, axis, spectators; // in client order
+    // free-for-all's players whose side isn't sent (AA servers' configstrings carry the name only, as
+    // stock 1.11, and FFA's "scores" rows no team), in client order
+    std::vector<rlPlayer_t> freeForAll;
     int                     connected;
     int                     self;
     int                     teamScore[2]; // -1 unknown
@@ -212,6 +215,8 @@ static void RL_Info(rlInfo_t *in)
             in->axis.push_back(p);
         } else if (team == TEAM_SPECTATOR) {
             in->spectators.push_back(p);
+        } else if (team == TEAM_FREEFORALL) {
+            in->freeForAll.push_back(p);
         }
     }
     // the teams' scores: the server's (CS_TEAMSCORES), else the scoreboard's
@@ -3747,6 +3752,12 @@ void UIReloadedMenu::DrawScoreboard(const rlView_t& v, const rlInfo_t& in)
     for (int t = 0; t < 2; t++) {
         for (const rlPlayer_t& p : t ? in.axis : in.allies) {
             lists[ffa ? 0 : t].push_back({&p, RL_Score(p.client), t, 0});
+        }
+    }
+    // (FFA's players of no known side with the others: its table shows no sides)
+    if (ffa) {
+        for (const rlPlayer_t& p : in.freeForAll) {
+            lists[0].push_back({&p, RL_Score(p.client), 0, 0});
         }
     }
     {
