@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../qcommon/q_shared.h"
 #include "bg_public.h"
 #include "bg_local.h"
+#include "bg_lean.h"
 
 pmove_t *pm;
 pml_t    pml;
@@ -444,7 +445,9 @@ qboolean PM_FeetOnGround(vec3_t pos)
 
     VectorCopy(pos, start);
     VectorCopy(pos, end);
-    end[2] -= 16.01f;
+    // 16.1 in stock AA 1.11 (Linux fgamededmohaa.so 0x1e564d and both
+    // copies in PM_CheckFeet), from pos itself
+    end[2] -= 16.1f;
 
     pm->trace(&trace, start, min3x3, max3x3, end, pm->ps->clientNum, pm->tracemask, true, false);
 
@@ -1353,35 +1356,14 @@ void PmoveSingle(pmove_t *pmove)
          && (pm->cmd.buttons & (BUTTON_LEAN_LEFT | BUTTON_LEAN_RIGHT)) != (BUTTON_LEAN_LEFT | BUTTON_LEAN_RIGHT))
         && (!pm->cmd.forwardmove || pm->alwaysAllowLean) && (!pm->cmd.rightmove || pm->alwaysAllowLean)
         && (!pm->cmd.upmove || pm->alwaysAllowLean)) {
+        // as stock: the minimum step applies on both sides, and the lean is
+        // clamped after the step (bg_lean.h)
         if (pm->cmd.buttons & BUTTON_LEAN_LEFT) {
-            if (pm->ps->fLeanAngle <= -pm->leanMax) {
-                pm->ps->fLeanAngle = -pm->leanMax;
-            } else {
-                float fAngle     = pml.frametime * (-pm->leanMax - pm->ps->fLeanAngle) * pm->leanAdd;
-                float fLeanAngle = pml.frametime * -pm->leanSpeed;
-
-                if (fAngle <= fLeanAngle) {
-                    fLeanAngle = fAngle;
-                }
-
-                pm->ps->fLeanAngle += fLeanAngle;
-            }
+            pm->ps->fLeanAngle =
+                PM_LeanLeft(pm->ps->fLeanAngle, pml.frametime, pm->leanMax, pm->leanAdd, pm->leanSpeed);
         } else {
-            if (pm->ps->fLeanAngle >= pm->leanMax) {
-                pm->ps->fLeanAngle = pm->leanMax;
-            } else {
-                float fAngle     = pm->leanMax - pm->ps->fLeanAngle;
-                float fLeanAngle = pml.frametime * pm->leanSpeed;
-                float fMult      = pml.frametime * fAngle * pm->leanAdd;
-
-                if (fLeanAngle <= fMult) {
-                    fLeanAngle = fMult;
-                } else {
-                    fLeanAngle = fMult;
-                }
-
-                pm->ps->fLeanAngle += fLeanAngle;
-            }
+            pm->ps->fLeanAngle =
+                PM_LeanRight(pm->ps->fLeanAngle, pml.frametime, pm->leanMax, pm->leanAdd, pm->leanSpeed);
         }
     } else if (pm->ps->fLeanAngle) {
         float fAngle = pm->ps->fLeanAngle * pml.frametime * pm->leanRecoverSpeed;
@@ -1721,7 +1703,8 @@ void PmoveAdjustAngleSettings_Client(
         VectorSet(torsoAngles, AngleMod(vViewAngles[0]), 0.0, pPlayerState->fLeanAngle * 0.7);
 
         if (torsoAngles[0] > 180.0) {
-            torsoAngles[0] -= 180.0;
+            // 360 as off the ladder, as stock 1.11 (cgamex86.dll 0x30005180)
+            torsoAngles[0] -= 360.0;
         }
 
         torsoAngles[0] += 8.0;
@@ -1736,7 +1719,8 @@ void PmoveAdjustAngleSettings_Client(
 
         // head angles
         AnglesSubtract(vViewAngles, vAngles, headAngles);
-        headAngles[0] *= 0.5;
+        // all three halved, as stock 1.11 (cgamex86.dll 0x300052aa-0x300052cb)
+        VectorScale(headAngles, 0.5f, headAngles);
         AnglesSubtract(headAngles, torsoAngles, headAngles);
         VectorCopy(headAngles, pEntState->bone_angles[HEAD_TAG]);
         EulerToQuat(pEntState->bone_angles[HEAD_TAG], pEntState->bone_quat[HEAD_TAG]);
