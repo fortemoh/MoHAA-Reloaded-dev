@@ -5612,7 +5612,11 @@ void Player::EvaluateState(State *forceTorso, State *forceLegs)
                 } else if (legsAnim != "") {
                     float oldTime;
 
-                    if (g_playeranim_legs_continous->integer && currentState_Legs == laststate_Legs) {
+                    // AA 1.11 restarts the legs at 0 (EvaluateState 0x276570 calls
+                    // only SetPartAnim, which ends in SetTime(slot, 0) at 0x294b4b),
+                    // so this is kept for Spearhead and Breakthrough only
+                    if (g_protocol >= protocol_e::PROTOCOL_MOHTA_MIN && g_playeranim_legs_continous->integer
+                        && currentState_Legs == laststate_Legs) {
                         //
                         // Added in OPM
                         //  This allows different animations in the same state
