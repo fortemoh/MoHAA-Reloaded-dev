@@ -347,7 +347,7 @@ movement on the server game.
     void Pmove_GroundTrace(pmove_t *pmove);
     void Pmove(pmove_t *pmove);
     void
-    PmoveAdjustAngleSettings(vec_t *vViewAngles, vec_t *vAngles, playerState_t *pPlayerState, entityState_t *pEntState);
+    PmoveAdjustAngleSettings(vec_t *vViewAngles, vec_t *vAngles, playerState_t *pPlayerState, entityState_t *pEntState, int protocol);
     void PmoveAdjustAngleSettings_Client(
         vec_t *vViewAngles, vec_t *vAngles, playerState_t *pPlayerState, entityState_t *pEntState
     );
