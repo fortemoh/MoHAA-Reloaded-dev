@@ -762,10 +762,17 @@ static void SV_AddEntitiesVisibleFromPoint(const vec3_t origin, clientSnapshot_t
 
 		svEnt = SV_SvEntityForGentity( ent );
 
-		// don't double add an entity through portals
-		if ( svEnt->snapshotCounter == sv.snapshotCounter ) {
-			continue;
-		}
+		//
+		// Changed in OPM
+		//  No early skip of an entity already in this snapshot (Quake 3's
+		//  "don't double add an entity through portals"). Stock goes on
+		//  (Linux 0x808e196 to the sky-origin test at 0x808e1a4), and each
+		//  add path handles a repeat: SV_AddEntToSnapshot and the check
+		//  after the leaf test mark it RF_WRAP_FRAMES (drawn in the main
+		//  view and in portal views). The skip left a client's own entity
+		//  out of portal views, and an entity first reached through a
+		//  portal out of the main view (SD-092).
+		//
 
 		if (ent->s.renderfx & RF_SKYORIGIN) {
 			if (sv.skyportal && !portalsky && !portalEnt) {
