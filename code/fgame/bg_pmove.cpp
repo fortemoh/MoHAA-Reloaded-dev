@@ -758,6 +758,12 @@ static void PM_CrashLand(void)
     float t;
     float a, b, c, den;
 
+    if (pm->waterlevel == 3) {
+        // no landing under water, as stock 1.11 (Linux fgamededmohaa.so
+        // 0x1e3c3c, cgamex86.dll 0x30003b45)
+        return;
+    }
+
     // calculate the exact velocity on landing
     dist = pm->ps->origin[2] - pml.previous_origin[2];
     vel  = pml.previous_velocity[2];
