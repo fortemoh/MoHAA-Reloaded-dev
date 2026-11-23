@@ -150,6 +150,7 @@ static struct {
     // the kills' deaths
     int      team[MAX_CLIENTS];
     qboolean dead[MAX_CLIENTS];
+    int      side[MAX_CLIENTS]; // the uniform last seen on each player: TEAM_ALLIES, TEAM_AXIS, 0 not seen
     char     roundStart[64];
     int      sbCount;           // ui_hud_sb's modificationCount read
     int      sbScore[2];        // the scoreboard's teams' scores, -1 unknown
@@ -434,6 +435,18 @@ static int Comp_Team(int client)
         return 0;
     }
     return cs.team[client] >= 0 ? cs.team[client] : UI_Menus_ScoreTeam(client);
+}
+
+// a player's side, TEAM_ALLIES or TEAM_AXIS, 0 unknown: their team (Comp_Team), else the
+// uniform last seen on them (free-for-all on an AA server: the side is sent nowhere else)
+static int Comp_Side(int client)
+{
+    const int team = Comp_Team(client);
+
+    if (team == TEAM_ALLIES || team == TEAM_AXIS) {
+        return team;
+    }
+    return client >= 0 && client < MAX_CLIENTS ? comp.side[client] : 0;
 }
 
 // the one client called name, -1 none or more
@@ -823,12 +836,16 @@ static void Comp_Roster(int gametype)
         }
     }
     // the players the snapshot shows (not our own entity: a dead player's
-    // spectator is sent, not dead), and the player watched
+    // spectator is sent, not dead), and the player watched; the uniform
+    // each wears
     for (i = 0; i < cl.snap.numEntities; i++) {
         const entityState_t *es = &cl.parseEntities[(cl.snap.parseEntitiesNum + i) & (MAX_PARSE_ENTITIES - 1)];
 
         if (es->eType == ET_PLAYER && es->number >= 0 && es->number < MAX_CLIENTS && es->number != ps->clientNum) {
             comp.dead[es->number] = (es->eFlags & EF_DEAD) != 0;
+            if (es->eFlags & (EF_ALLIES | EF_AXIS)) {
+                comp.side[es->number] = es->eFlags & EF_ALLIES ? TEAM_ALLIES : TEAM_AXIS;
+            }
         }
     }
     if (!(ps->pm_flags & PMF_SPECTATING)) {
@@ -1255,11 +1272,12 @@ void UI_CompHud_Frame(void)
     Comp_Weapons(weapon);
 
     // the strip: health, badge, ammo, weapons (not while free spectating); the
-    // badge the followed player's team (from behind the snapshot's is ours)
+    // badge the followed player's team (from behind the snapshot's is ours),
+    // in free-for-all the side played (the uniform)
     {
-        const qboolean icon =
-            teams && (!spectating || following) && Comp_Int("cg_hud_badge") && Comp_Int("cg_hud_teamicon");
-        const int shown = following ? Comp_Team(ps->stats[STAT_INFOCLIENT]) : team;
+        const qboolean icon = (teams || gametype == GT_FFA) && (!spectating || following) && Comp_Int("cg_hud_badge")
+                           && Comp_Int("cg_hud_teamicon");
+        const int shown = following ? Comp_Side(ps->stats[STAT_INFOCLIENT]) : team;
 
         Comp_Set("ui_hud_allies", icon && shown == TEAM_ALLIES ? "1" : "0");
         Comp_Set("ui_hud_axis", icon && shown == TEAM_AXIS ? "1" : "0");
