@@ -561,8 +561,10 @@ void CG_CalcViewModelMovement(float fViewBobPhase, float fViewBobAmp, vec_t *vVe
     vMovement[0] = fPhase * vm_sway_front->value;
     vMovement[1] = fPhase;
 
-    fPhase       = sin(fViewBobPhase - 0.94 + fViewBobPhase - 0.94 + M_PI);
-    vMovement[2] = (sin((fViewBobPhase - 0.94) * 4.0 + M_PI / 2) * 0.125 + fPhase) * fViewBobAmp * vm_sway_up->value;
+    // stock 1.11's phase offset is 0.9424778f (cgamex86.dll 0x300775cc)
+    fPhase       = sin(fViewBobPhase - 0.9424778f + fViewBobPhase - 0.9424778f + M_PI);
+    vMovement[2] = (sin((fViewBobPhase - 0.9424778f) * 4.0 + M_PI / 2) * 0.125 + fPhase) * fViewBobAmp
+                 * vm_sway_up->value;
 
     if (cg.predicted_player_state.walking) {
         if (cg.predicted_player_state.viewheight == CROUCH_EYE_HEIGHT) {
