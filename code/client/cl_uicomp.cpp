@@ -133,7 +133,7 @@ typedef struct {
 typedef struct {
     int         time;
     char        killer[MAX_NAME_LENGTH], victim[MAX_NAME_LENGTH];
-    int         killerTeam, victimTeam;
+    int         killerTeam, victimTeam; // sides (Comp_Side), 0 unknown
     const char *pic;
     float       picW, picH; // design pixels
     qboolean    suicide, headshot;
@@ -513,7 +513,7 @@ static qboolean Comp_AddKill(const char *text, qboolean ourVictim)
     const compKillPic_t *pic = &comp_killPics[0];
     compKill_t          *k;
     const char          *hit = NULL, *after, *end = NULL;
-    int                  client, killer, side;
+    int                  client;
     qboolean             axis;
 
     for (size_t i = 0; i < ARRAY_LEN(comp_phrases) && !ph; i++) {
@@ -555,23 +555,18 @@ static qboolean Comp_AddKill(const char *text, qboolean ourVictim)
             pic = &comp_killPics[i];
         }
     }
+    // the names' sides (their colours) by Comp_Side: the server's team, else the uniform last seen on them (all an
+    // AA server's free-for-all tells)
     client        = Comp_FindName(k->victim);
-    k->victimTeam = client >= 0 ? Comp_Team(client) : 0;
+    k->victimTeam = Comp_Side(client);
     if (!k->victimTeam && Comp_Gametype() >= GT_TEAM) {
         const int mine = cl.snap.ps.stats[STAT_TEAM];
 
         k->victimTeam = ourVictim == (mine != TEAM_AXIS) ? TEAM_ALLIES : TEAM_AXIS;
     }
-    killer        = Comp_FindName(k->killer);
-    k->killerTeam = Comp_Team(killer);
-    // the weapon's picture of the killer's side, the victim's without a killer (Comp_Side: their team, else the
-    // uniform last seen on them, all an AA server's free-for-all tells; a round mode's victim of no known team:
-    // the side guessed above)
-    side = Comp_Side(k->killer[0] ? killer : client);
-    if (!side && !k->killer[0]) {
-        side = k->victimTeam;
-    }
-    axis    = side == TEAM_AXIS;
+    k->killerTeam = Comp_Side(Comp_FindName(k->killer));
+    // the killer's weapon: of the victim's side without one
+    axis    = (k->killer[0] ? k->killerTeam : k->victimTeam) == TEAM_AXIS;
     k->pic  = axis ? pic->axis : pic->allies;
     Comp_KillIconSize(pic, axis, &k->picW, &k->picH);
     // (a suicide is the player's death)
@@ -1422,14 +1417,14 @@ void UI_CompHud_Frame(void)
     // over their head, UI_DrawTeamTag; who killed you: the kill feed)
     if (full) {
         const int info  = ps->stats[STAT_INFOCLIENT];
-        // (the plate's icon their side, as the CS2 strip's badge: Comp_Side)
+        // (the plate's icon and colour their side, as the CS2 strip's badge: Comp_Side)
         const int fteam = following ? Comp_Side(info) : 0;
 
         Comp_Set("ui_hud_follow", following ? Comp_Name(info) : "");
-        Comp_Set("ui_hud_follow_col", following ? Comp_TeamColor(Comp_Team(info)) : "1 1 1 1");
+        Comp_Set("ui_hud_follow_col", following ? Comp_TeamColor(fteam) : "1 1 1 1");
         Comp_Set("ui_hud_follow_team", fteam == TEAM_AXIS ? "axis" : fteam == TEAM_ALLIES ? "allies" : "");
         Comp_Set("ui_hud_hurt", attacker >= 0 && attacker < MAX_CLIENTS ? Comp_Name(attacker) : "");
-        Comp_Set("ui_hud_hurt_col", Comp_TeamColor(Comp_Team(attacker)));
+        Comp_Set("ui_hud_hurt_col", Comp_TeamColor(Comp_Side(attacker)));
     }
 
     // a vote
