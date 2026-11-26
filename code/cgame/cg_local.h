@@ -413,6 +413,7 @@ extern "C" {
         int        cinematic;
         int        mapChecksum;
         qboolean   useMapChecksum;
+        qboolean   anySkin; // sv_anyskin: force models may use any skin, not only the server's
         char       mapname[MAX_QPATH];
 
         //
