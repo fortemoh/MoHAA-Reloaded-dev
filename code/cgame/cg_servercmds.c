@@ -163,6 +163,14 @@ void CG_ParseServerinfo(void)
     cgi.Cvar_Set("cg_obj_axistext5", Info_ValueForKey(info, "g_obj_axistext5"));
     cgi.Cvar_Set("cg_scoreboardpic", Info_ValueForKey(info, "g_scoreboardpic"));
     cgi.Cvar_Set("cg_scoreboardpicover", Info_ValueForKey(info, "g_scoreboardpicover"));
+    // Added in Reloaded: a server's sv_anyskin 1 lets force models draw a skin
+    // the server doesn't have; a change checks the picks again
+    if (cgs.anySkin != (atoi(Info_ValueForKey(info, "sv_anyskin")) != 0)) {
+        cgs.anySkin                    = !cgs.anySkin;
+        dm_playermodel->modified       = qtrue;
+        dm_playergermanmodel->modified = qtrue;
+    }
+
     mapChecksumStr = Info_ValueForKey(info, "sv_mapChecksum");
     if (mapChecksumStr && mapChecksumStr[0]) {
         cgs.mapChecksum    = atoi(mapChecksumStr);

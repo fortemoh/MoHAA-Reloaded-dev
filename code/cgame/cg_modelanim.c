@@ -879,7 +879,8 @@ CG_CheckValidModels
 
 This verifies the allied player model and the german player model:
 - If they don't exist on the client, reset to the default allied player model
-- If they don't exist on the server, don't allow forceModel so the client explicitly know the skin isn't supported
+- If they don't exist on the server, don't allow forceModel so the client explicitly know the skin isn't supported,
+  unless the server sets sv_anyskin 1 (Added in Reloaded)
 ===============
 */
 void CG_CheckValidModels()
@@ -899,7 +900,7 @@ void CG_CheckValidModels()
             modelpath = va("models/player/%s.tik", dm_playermodel->string);
         }
 
-        cg.serverAlliedModelValid = CG_IsValidServerModel(modelpath);
+        cg.serverAlliedModelValid = cgs.anySkin || CG_IsValidServerModel(modelpath);
     }
 
     if (dm_playergermanmodel->modified) {
@@ -916,7 +917,7 @@ void CG_CheckValidModels()
             modelpath = va("models/player/%s.tik", dm_playergermanmodel->string);
         }
 
-        cg.serverAxisModelValid = CG_IsValidServerModel(modelpath);
+        cg.serverAxisModelValid = cgs.anySkin || CG_IsValidServerModel(modelpath);
     }
 
     if (dm_playermodel->modified || dm_playergermanmodel->modified) {
