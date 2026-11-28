@@ -5499,13 +5499,16 @@ void Player::EvaluateState(State *forceTorso, State *forceLegs)
                     StopPartAnimating(torso);
                     animdone_Torso = true;
                 } else if (torsoAnim != "") {
-                    if (torsoAnim == partAnim[torso]) {
-                        // Fixed in OPM
-                        //  Stop the part if it's the same animation
-                        //  so the new animation can play and make some action
-                        //  like activate the new weapon.
-                        StopPartAnimating(torso);
-                    }
+                    //
+                    // Changed in OPM
+                    //  No stop when the state asks for the animation already
+                    //  playing, which made it start again. Stock checks only
+                    //  for "none" and "" before SetPartAnim (Linux 0x276c7e),
+                    //  and SetPartAnim keeps a playing animation: a hit during
+                    //  the pain animation doesn't restart it, and switching to
+                    //  a weapon of the same class during a raise lets that
+                    //  raise finish, then raises the new one (SD-096).
+                    //
                     SetPartAnim(torsoAnim.c_str(), torso);
                 }
             } else {
@@ -5513,11 +5516,8 @@ void Player::EvaluateState(State *forceTorso, State *forceLegs)
                     StopPartAnimating(torso);
                     animdone_Torso = true;
                 } else if (torsoAnim != "") {
-                    if (torsoAnim == partAnim[torso]) {
-                        // Fixed in OPM
-                        //  See above
-                        StopPartAnimating(torso);
-                    }
+                    // Changed in OPM
+                    //  See above (SD-096)
                     SetPartAnim(torsoAnim.c_str(), torso);
                 }
 
